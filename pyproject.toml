@@ -1,0 +1,32 @@
+[project]
+name = "NumOpt"
+description = "pti is a Python package that helps you design and optimize engineered systems."
+authors = [{ name = "Zcaic"}]
+readme = "README.md"
+license = {file="LICENSE.txt"}
+classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Science/Research',
+    'Topic :: Scientific/Engineering :: Physics',
+    'License :: OSI Approved :: MIT License',
+    'Programming Language :: Python :: 3',
+]
+keywords = ["optimization", "automatic", "differentiation"]
+dynamic = ["version"]
+urls = { homepage = "https://github.com/Zcaic/NumOpt.git" }
+requires-python = ">= 3.9"
+dependencies = [
+    'aerosandbox >= 4.2.8',
+    "termcolor >= 3.1.0"
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = { attr = "NumOpt.__init__.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["NumOpt*"]
