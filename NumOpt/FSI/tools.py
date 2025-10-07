@@ -1,6 +1,6 @@
 import re 
 from pathlib import Path 
-from NumOpt import cprint_green
+from ..cprint import cprint_green
 
 def deal_name(nasfile,outfile):
     def sub_func(match):
