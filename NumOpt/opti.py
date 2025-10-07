@@ -1,16 +1,8 @@
 import aerosandbox.numpy as anp
 import aerosandbox as asb 
 import casadi as cas
-from termcolor import cprint
-from functools import partial
 from typing import Callable, Any, Dict
-
-cprint_green = partial(cprint, color="green", attrs=["bold"])
-cprint_magenta = partial(cprint, color="magenta", attrs=["bold"])
-cprint_blue = partial(cprint, color="blue", attrs=["bold"])
-cprint_red = partial(cprint, color="red", attrs=["bold"])
-cprint_yellow = partial(cprint, color="yellow", attrs=["bold"])
-
+from .cprint import cprint_yellow
 
 # def trape(y, x):
 #     y = anp.array(y)
