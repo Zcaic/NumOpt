@@ -1,5 +1,6 @@
 import aerosandbox.numpy as anp
 import aerosandbox as asb 
+import numpy as np 
 import casadi as cas
 from typing import Callable, Any, Dict
 from .cprint import cprint_yellow
