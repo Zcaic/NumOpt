@@ -1,32 +1,34 @@
 from NumOpt.airfoil.bezier import Bezier, BezierAirfoil
-from NumOpt.opti import cas,Opti
+from NumOpt.opti import cas, Opti
 import numpy as np
-import aerosandbox as asb
+import aerosandbox as asb 
+from NumOpt.cprint import nostd
 
 
 def test1():
-    opti=Opti()
-    T=opti.variable(init_guess=2.8e3*9.8)
+    opti = Opti()
+    T = opti.variable(init_guess=2.8e3 * 9.8)
 
-    A=np.pi*3.5**2
-    vi=(T/(2*1.225*A))**0.5
+    A = np.pi * 3.5**2
+    vi = (T / (2 * 1.225 * A)) ** 0.5
 
-    Pin=743e3
+    Pin = 743e3
 
-    eta=T*vi/Pin 
+    eta = T * vi / Pin
 
-    opti.subject_to([
-        eta==0.80
-    ])
+    opti.subject_to([eta == 0.80])
 
     opti.solver()
-    sol=opti.solve()
+    sol = opti.solve()
     print(sol(T))
 
+
 def test2():
-    af=asb.Airfoil("naca0012")
-    af_new=BezierAirfoil.fit(upper_coordinates=af.upper_coordinates(),lower_coordinates=af.lower_coordinates(),symmetry=True)
-    af_new=af_new.set_thickness(5e-3)
+    af = asb.Airfoil("naca0012")
+    af_new = BezierAirfoil.fit(
+        upper_coordinates=af.upper_coordinates(), lower_coordinates=af.lower_coordinates(), symmetry=True
+    )
+    af_new = af_new.set_thickness(5e-3)
     print(af_new.thickness)
     coords = af_new.coordinates(np.linspace(0, 1, 100))
 
@@ -34,13 +36,12 @@ def test2():
 
     fig = plt.figure()
     ax = fig.add_subplot()
-    ax.plot(coords[:, 0], coords[:, 1],label="fit")
-    ax.plot(af.coordinates[:,0],af.coordinates[:,1],label="ori")
-    ax.plot(af_new.ctu[:,0],af_new.ctu[:,1],"o--",label="ctu")
-    ax.plot(af_new.ctl[:,0],af_new.ctl[:,1],"o--",label="ctl")
+    ax.plot(coords[:, 0], coords[:, 1], label="fit")
+    ax.plot(af.coordinates[:, 0], af.coordinates[:, 1], label="ori")
+    ax.plot(af_new.ctu[:, 0], af_new.ctu[:, 1], "o--", label="ctu")
+    ax.plot(af_new.ctl[:, 0], af_new.ctl[:, 1], "o--", label="ctl")
     ax.legend()
     plt.show()
-
 
 
 def test3():
@@ -108,18 +109,17 @@ def test5():
             ],
             [
                 S_alpha * p**2 - (2 * a + 1) * pi * r * v * b**2 * p,
-                I_alpha * p**2 + (2 * a *a) * pi * r * v * b**3 * p + K_alpha - (2 * a + 1) * pi * r * v**2 * b**2,
+                I_alpha * p**2 + (2 * a * a) * pi * r * v * b**3 * p + K_alpha - (2 * a + 1) * pi * r * v**2 * b**2,
             ],
         ]
     )
 
-    detA=A.det()
+    detA = A.det()
 
-    p_expr=sp.solve(detA,p)
+    p_expr = sp.solve(detA, p)
 
     # p_expr=sp.lambdify([v,m,r,b,K_h,K_alpha,S_alpha,I_alpha,a],p_expr)
     return p_expr
-
 
 
 def test6():
@@ -137,10 +137,33 @@ def test6():
     plt.show()
 
 
+def test7():
+    opti = cas.Opti()
+    x = opti.variable(5)
+    obj = cas.sum((x - 0.5) ** 2)
+
+    opti.subject_to([opti.bounded(-10.0, x, 10.0)])
+    opti.minimize(obj)
+    # opti.solver("sqpmethod",{"qpsol":"qrqp"})
+    # opti.solver(
+    #     "sqpmethod", {"qpsol": "qpoases", "hessian_approximation": "limited-memory", "qpsol_options":{"print_problem": False}}
+    # )
+    opti.solver("sqpmethod", {"qpsol": "qpoases"})
+
+    opti.set_initial(x, 5.0)
+
+
+    with nostd():
+        sol = opti.solve()
+    print(sol.value(x))
+
+
+
 if __name__ == "__main__":
     # test1()
-    test2()
+    # test2()
     # test3()
     # test4()
     # test5()
     # test6()
+    test7()
