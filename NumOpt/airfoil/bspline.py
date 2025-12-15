@@ -20,7 +20,7 @@ class Bspline:
     @staticmethod
     def __deBoor(t, i, k, knots):
         if k == 1:
-            return cas.if_else(cas.logic_and(t >= knots[i], t <= knots[i + 1]), 1.0, 0.0)
+            return cas.if_else(cas.logic_and(t >= knots[i], t < knots[i + 1]), 1.0, 0.0)
         else:
             term1 = term2 = 0.0
             delta_t1 = knots[i + k - 1] - knots[i]
@@ -38,13 +38,24 @@ class Bspline:
         return Bspline.__deBoor(t, i, self.order, self.knots)
 
     def __call__(self, t):
+        def func():
+            tmp = 0.0
+            for j in range(self.n + 1):
+                N_coef = self.N_coef(u, j)
+                tmp = tmp + N_coef * self.ctrlpts[j : j + 1, :]
+            return tmp
+
         nts = t.shape[0]
         pts = [0.0] * nts
 
         for i in range(nts):
             u = t[i]
-            for j in range(self.n + 1):
-                N_coef = self.N_coef(u, j)
-                pts[i] = pts[i] + N_coef * self.ctrlpts[j : j + 1, :]
+            pts[i] = cas.if_else(u == 1.0, self.ctrlpts[-1:, :], func())
+            # if u == 1.0:
+            #     pts[i] = self.ctrlpts[-1:, :]
+            # else:
+            #     for j in range(self.n + 1):
+            #         N_coef = self.N_coef(u, j)
+            #         pts[i] = pts[i] + N_coef * self.ctrlpts[j : j + 1, :]
         pts = cas.vcat(pts)
         return pts
