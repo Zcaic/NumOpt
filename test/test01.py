@@ -1,10 +1,9 @@
-from NumOpt.airfoil.bezier import Bezier, BezierAirfoil
+from NumOpt.airfoil.bezier import BezierAirfoil
 from NumOpt.opti import cas, Opti, anp
 import numpy as np
 import aerosandbox as asb
 from NumOpt.cprint import nostd
 from NumOpt.airfoil.export_cst2nx import cst2nx
-
 
 def test1():
     opti = Opti()
@@ -449,6 +448,93 @@ def test13():
     plt.show()
 
 
+def test14():
+    from NumOpt.airfoil.bspline import BsplineAirfoil
+
+    af=asb.Airfoil("n63415")
+
+    af_fit=BsplineAirfoil.fit(upper_coordinates=af.upper_coordinates(),lower_coordinates=af.lower_coordinates(),symmetry=False)
+
+    t=np.linspace(0,1,100)
+    coords=af_fit.coordinates(t)
+
+    import matplotlib.pyplot as plt 
+    fig=plt.figure()
+    ax=fig.add_subplot()
+    ax.plot(af.coordinates[:,0],af.coordinates[:,1],label="old")
+    ax.plot(coords[:,0],coords[:,1],label="fit")
+    ax.plot(af_fit.ctu[:,0],af_fit.ctu[:,1],"--o",label="ctu")
+    ax.plot(af_fit.ctl[:,0],af_fit.ctl[:,1],"--o",label="ctl")
+    ax.legend()
+    plt.show()
+
+
+def test15():
+    from NumOpt.airfoil.kulfan import KulfanAirfoil 
+    af=asb.Airfoil("naca0012").normalize()
+
+    af_fit:KulfanAirfoil=KulfanAirfoil.fit(upper_coordinates=af.upper_coordinates(),lower_coordinates=af.lower_coordinates(),symmetry=True)
+
+    t=np.linspace(0,1,100)
+    coords=af_fit.coordinates(t)
+
+    import matplotlib.pyplot as plt 
+    fig=plt.figure()
+    ax=fig.add_subplot()
+    ax.plot(af.coordinates[:,0],af.coordinates[:,1],label="old")
+    ax.plot(coords[:,0],coords[:,1],label="fit")
+    ax.legend()
+    plt.show()
+
+def test16():
+    from NumOpt.airfoil.kulfan import KulfanAirfoil 
+    af=asb.KulfanAirfoil("n63415")
+    af_fit=KulfanAirfoil(Au=af.upper_weights,Al=af.lower_weights,N1=af.N1,N2=af.N2,Le=af.leading_edge_weight,Te=af.TE_thickness)
+    coords=af_fit.coordinates(np.linspace(0,1,100))
+
+    import matplotlib.pyplot as plt 
+    fig=plt.figure()
+    ax=fig.add_subplot()
+    ax.plot(af.coordinates[:,0],af.coordinates[:,1],label="old")
+    ax.plot(coords[:,0],coords[:,1],label="fit")
+    ax.legend()
+    plt.show()
+
+def test17():
+    opti=cas.Opti()
+    N1=opti.variable(1)
+    N2=opti.variable(1)
+
+    x=0.5
+    y=x**N1*(1-x)*N2
+
+    opti.minimize(y)
+    opti.subject_to([
+        opti.bounded(0.0,N1,1.0),
+        opti.bounded(0.0,N2,1.0)
+    ])
+
+    default_options = {
+        "ipopt.sb": "yes",
+        "ipopt.max_iter": 1000,
+        "ipopt.max_cpu_time": 1e20,
+        "ipopt.mu_strategy": "adaptive",
+        "ipopt.fast_step_computation": "yes",
+        "detect_simple_bounds": False,
+        "expand": True,
+        "print_time": False,
+        "ipopt.print_level": 0,
+    }
+
+    opti.solver("ipopt",default_options)
+
+    sol=opti.solve()
+
+
+
+
+
+
 if __name__ == "__main__":
     # test1()
     # test2()
@@ -462,4 +548,8 @@ if __name__ == "__main__":
     # test10()
     # test11()
     # test12()
-    test13()
+    # test13()
+    # test14()
+    test15()
+    # test16()
+    # test17()
