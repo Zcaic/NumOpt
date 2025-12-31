@@ -532,7 +532,171 @@ def test17():
 
 
 
+def test18():
+    import jax 
+    import jax.numpy as jnp 
 
+    # @jax.grad
+    def func(x):
+        return jnp.sin(x)
+    
+    y=func(0.0)
+    print(y)
+
+def test19():
+    import jax
+    import jax.numpy as jnp
+    from scipy.optimize import minimize
+    import diffrax
+    import optimistix as optx
+
+    # -----------------------------
+    # 1️⃣ 物理参数
+    # -----------------------------
+    g = 9.81          # 重力加速度 (m/s^2)
+    v0 = 20.0         # 初速度 (m/s)
+    c_d = 0.05        # 阻力系数 (drag coefficient)
+
+    # -----------------------------
+    # 2️⃣ 定义动力学系统 (带空气阻力)
+    # 状态 y = [x, y, vx, vy]
+    # -----------------------------
+    def projectile_dynamics(t, y, args):
+        x, y_pos, vx, vy = y
+        v = jnp.sqrt(vx**2 + vy**2)
+        dxdt = vx
+        dydt = vy
+        dvxdt = -c_d * v * vx
+        dvydt = -g - c_d * v * vy
+        return jnp.array([dxdt, dydt, dvxdt, dvydt])
+
+    # -----------------------------
+    # 3️⃣ 模拟轨迹直到落地
+    # -----------------------------
+    def simulate(theta):
+        # 初始条件
+        y0 = jnp.array([
+            0.0,                         # x
+            0.0,                         # y
+            v0 * jnp.cos(theta),         # vx
+            v0 * jnp.sin(theta)          # vy
+        ])
+
+        # 定义事件函数（落地条件 y = 0）
+        def event_fn(t, y, args,**kwargs):
+            return y[1]  # 高度 y
+
+        event = diffrax.Event(event_fn, optx.Newton(1e-5, 1e-5, optx.rms_norm))
+
+        # 使用Tsit5积分器（高精度 Runge-Kutta）
+        solver = diffrax.Tsit5()
+        term = diffrax.ODETerm(projectile_dynamics)
+        saveat = diffrax.SaveAt(t1=True, dense=True)
+
+        sol = diffrax.diffeqsolve(
+            term,
+            solver,
+            t0=0.0,
+            t1=10.0,          # 最大模拟时间
+            dt0=0.01,
+            y0=y0,
+            event=event,
+            saveat=saveat,
+            max_steps=4096
+        )
+
+        final_state = sol.ys
+        x_final = final_state[0,0]  # 落地时水平位移
+        return x_final
+
+    # -----------------------------
+    # 4️⃣ 定义目标函数（最小化 -射程）
+    # -----------------------------
+    def objective(theta_array):
+        theta = theta_array[0]
+        R = simulate(theta)
+        return -R  # 最大化 R 等价于最小化 -R
+
+    # -----------------------------
+    # 5️⃣ 自动微分梯度
+    # -----------------------------
+    grad_objective = jax.jit(jax.grad(lambda t: objective(t)))
+
+    # -----------------------------
+    # 6️⃣ 使用 SLSQP 优化发射角度
+    # -----------------------------
+    res = minimize(
+        objective,
+        x0=jnp.array([0.5]),        # 初始猜测（约 30°）
+        method="SLSQP",
+        jac=grad_objective,
+        bounds=[(0, jnp.pi / 2)]    # 限制角度在 [0°, 90°]
+    )
+
+    theta_opt = res.x[0]
+    R_opt = simulate(theta_opt)
+
+    # -----------------------------
+    # 7️⃣ 输出结果
+    # -----------------------------
+    print("✅ 优化结果（含空气阻力）")
+    print(f"最优发射角 θ = {theta_opt:.4f} rad = {theta_opt * 180 / jnp.pi:.2f}°")
+    print(f"对应射程 R = {R_opt:.4f} m")
+    print(f"优化是否成功: {res.success}, 迭代次数: {res.nit}")
+
+def test20():
+    from scipy.optimize import minimize,OptimizeResult 
+    import jax.numpy as jnp 
+    import jax 
+    import numpy as np 
+
+    class UDP():
+        def __init__(self):
+            self._func_grad=jax.jacobian(self._func)
+        def _func(self,x):
+            return jnp.sin(x)
+        
+        def fun(self,x):
+            ret=np.array(self._func(x),dtype="f8")
+            return ret
+        
+        def grad(self,x):
+            ret=np.array(self._func_grad(x),dtype="f8")
+            return ret[0]
+
+    udp=UDP()
+    sol:OptimizeResult=minimize(
+        fun=udp.fun,
+        x0=0.0,
+        method="SLSQP",
+        jac=udp.grad,
+        bounds=[(0.0,jnp.pi*2.0),],
+        options={"disp":True}
+    )
+
+    print(sol.x,sol.fun)
+
+
+def test21():
+    import jax
+    import jax.numpy as jnp
+    import optimistix as optx
+
+    def func(x,args):
+        x0=x[0]
+        a=args[0]
+        return x0**2-a,
+    
+    def solve_x(a):
+        solver=optx.Newton(rtol=1e-6,atol=1e-6)
+        sol=optx.root_find(func,solver,(1.0,),args=(a,))
+        return sol.value[0]
+    # print(sol.value)
+    dxda=jax.grad(solve_x)
+    print(dxda(4.0))
+    # solver=optx.Newton(rtol=1e-6,atol=1e-6)
+    # sol=optx.root_find(func,solver,(1.0,),args=(4.0,))
+    # print(sol.value)
 
 
 if __name__ == "__main__":
@@ -550,6 +714,10 @@ if __name__ == "__main__":
     # test12()
     # test13()
     # test14()
-    test15()
+    # test15()
     # test16()
     # test17()
+    # test18()
+    # test19()
+    # test20()
+    test21()
