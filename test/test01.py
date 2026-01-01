@@ -698,7 +698,114 @@ def test21():
     # sol=optx.root_find(func,solver,(1.0,),args=(4.0,))
     # print(sol.value)
 
+def test22():
+    import numpy as np
 
+    class ECGEO:
+        """
+        Entropy–Covariance Guided Evolutionary Optimization (EC-GEO)
+        """
+        def __init__(self, func, dim, bounds, pop_size=50, max_iter=200, 
+                    sigma0=0.2, eta_g=0.3, eta_c=0.1, eta_e=0.1, top_k_ratio=0.3):
+            self.func = func
+            self.dim = dim
+            self.bounds = np.array(bounds)
+            self.pop_size = pop_size
+            self.max_iter = max_iter
+            self.sigma = sigma0
+            self.eta_g = eta_g
+            self.eta_c = eta_c
+            self.eta_e = eta_e
+            self.top_k_ratio = top_k_ratio
+
+            # 初始化群体
+            self.X = np.random.uniform(self.bounds[:, 0], self.bounds[:, 1], 
+                                    size=(self.pop_size, self.dim))
+            self.fitness = np.apply_along_axis(self.func, 1, self.X)
+            self.x_best = self.X[np.argmin(self.fitness)]
+            self.f_best = np.min(self.fitness)
+            self.mean = np.mean(self.X, axis=0)
+            self.C = np.cov(self.X.T)
+            self.H_prev = 0.5 * np.log((2 * np.pi * np.e) ** self.dim * np.linalg.det(self.C + 1e-12 * np.eye(self.dim)))
+
+        def step(self):
+            # 计算协方差矩阵与特征分解
+            self.mean = np.mean(self.X, axis=0)
+            self.C = np.cov(self.X.T)
+            eigvals, eigvecs = np.linalg.eigh(self.C)
+            idx = np.argsort(eigvals)[::-1]
+            eigvals, eigvecs = eigvals[idx], eigvecs[:, idx]
+
+            # 计算当前信息熵
+            H = 0.5 * np.log((2 * np.pi * np.e) ** self.dim * np.linalg.det(self.C + 1e-12 * np.eye(self.dim)))
+            delta_H = H - self.H_prev
+            self.H_prev = H
+
+            # 计算自然梯度方向
+            try:
+                g_nat = np.linalg.solve(self.C + 1e-8 * np.eye(self.dim), (self.x_best - self.mean))
+            except np.linalg.LinAlgError:
+                g_nat = (self.x_best - self.mean)
+
+            # 自适应学习率与步长
+            eta_eff = self.eta_g * np.exp(-self.eta_e * delta_H)
+            self.sigma *= np.exp(self.eta_c * delta_H)
+
+            # 生成新群体
+            K = max(1, int(self.dim * self.top_k_ratio))
+            new_X = []
+            for i in range(self.pop_size):
+                noise = np.zeros(self.dim)
+                for k in range(K):
+                    noise += np.sqrt(abs(eigvals[k])) * eigvecs[:, k] * np.random.randn()
+                x_new = self.X[i] - eta_eff * g_nat + self.sigma * noise
+                # 边界处理
+                x_new = np.clip(x_new, self.bounds[:, 0], self.bounds[:, 1])
+                new_X.append(x_new)
+            self.X = np.array(new_X)
+
+            # 计算新适应度
+            self.fitness = np.apply_along_axis(self.func, 1, self.X)
+            idx_best = np.argmin(self.fitness)
+            if self.fitness[idx_best] < self.f_best:
+                self.f_best = self.fitness[idx_best]
+                self.x_best = self.X[idx_best]
+
+        def optimize(self, verbose=True):
+            for t in range(self.max_iter):
+                self.step()
+                if verbose and (t % 10 == 0 or t == self.max_iter - 1):
+                    print(f"Iter {t:3d} | Best fitness: {self.f_best:.6e} | σ={self.sigma:.4f}")
+            return self.x_best, self.f_best
+
+    # ----------------------------
+    # 测试函数定义
+    # ----------------------------
+
+    def sphere(x):
+        """Sphere test function"""
+        return np.sum(x ** 2)
+
+    def rosenbrock(x):
+        """Rosenbrock function"""
+        return np.sum(100.0 * (x[1:] - x[:-1] ** 2) ** 2 + (1 - x[:-1]) ** 2)
+
+    # ----------------------------
+    # 示例运行
+    # ----------------------------
+    np.random.seed(42)
+    dim = 10
+    bounds = [(-5, 5)] * dim
+
+    print("=== Testing on Sphere function ===")
+    optimizer = ECGEO(func=sphere, dim=dim, bounds=bounds, pop_size=60, max_iter=150)
+    best_x, best_f = optimizer.optimize()
+    print(f"Final best fitness (Sphere): {best_f:.6e}\n")
+
+    print("=== Testing on Rosenbrock function ===")
+    optimizer = ECGEO(func=rosenbrock, dim=dim, bounds=bounds, pop_size=60, max_iter=200)
+    best_x, best_f = optimizer.optimize()
+    print(f"Final best fitness (Rosenbrock): {best_f:.6e}")
 if __name__ == "__main__":
     # test1()
     # test2()
@@ -720,4 +827,5 @@ if __name__ == "__main__":
     # test18()
     # test19()
     # test20()
-    test21()
+    # test21()
+    test22()
