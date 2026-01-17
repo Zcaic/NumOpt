@@ -64,8 +64,47 @@ class UDA(Algorithm):
     def _initialize_infill(self):
         return self.initialization.do(self.problem, self.pop_size, algorithm=self, random_state=self.random_state)
 
+    @staticmethod
+    def cov(X, Y, idx, mean=True):
+        xi = X - X[[idx]]
+        yi = Y - Y[[idx]]
+        ret = xi.T @ yi
+        if mean:
+            n_samples = X.shape[0]
+            ret = ret / (n_samples - 1)
+        return ret
+
     def _initialize_advance(self, infills=None, **kwargs):
         # self.pop = self.survial.do(self.problem, infills)
-        x = infills.get("X")
-        C = np.cov(m=x, ddof=1)
-        eigenvalues, eigenvectors = np.linalg.eigh(C)
+        infills=self.survial.do(self.problem, infills) 
+        self.pop=infills
+        # X=infills.get("X")
+        # F=infills.get("Y")
+        # pop_size=infills.shape[0]
+
+    def _infill(self):
+        X=self.pop.get("X")
+        F=self.pop.get("F")
+
+        for i in range(self.pop_size):
+            mask=np.ones(self.pop_size,dtype=bool)
+            mask[i]=False 
+            other_X=X[mask,:]
+            other_F=F[mask,:]
+
+            delta_F=other_F-F[[i],:]
+            delta_X=other_X-X[[i],:]
+
+            idx=np.where(delta_F<0.0)
+
+            better_dF=delta_F[idx]
+            worse_dF=delta_F[~idx]
+            better_dX=delta_X[idx]
+            worse_dX=delta_F[~idx]
+            
+             
+
+            
+
+
+

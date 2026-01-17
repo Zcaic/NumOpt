@@ -5,6 +5,7 @@ import aerosandbox as asb
 from NumOpt.cprint import nostd
 from NumOpt.airfoil.export_cst2nx import cst2nx
 
+
 def test1():
     opti = Opti()
     T = opti.variable(init_guess=2.8e3 * 9.8)
@@ -389,12 +390,12 @@ def test13():
     opti = cas.Opti()
 
     ctrlpts = opti.variable(9, 2)
-    ctrlpts_init=np.zeros(ctrlpts.shape)
-    ctrlpts_init[1:,0]=np.linspace(0,1,8)
-    ctrlpts_init[1:,1]=0.5
+    ctrlpts_init = np.zeros(ctrlpts.shape)
+    ctrlpts_init[1:, 0] = np.linspace(0, 1, 8)
+    ctrlpts_init[1:, 1] = 0.5
 
     t = opti.variable(coords.shape[0])
-    t_init=np.linspace(0,1,coords.shape[0],dtype="f8")
+    t_init = np.linspace(0, 1, coords.shape[0], dtype="f8")
 
     spline = Bspline(ctrlpts=ctrlpts, degree=3)
     pts = spline(t)
@@ -409,8 +410,8 @@ def test13():
             cas.diff(t) > 0.0,
             cas.diff(ctrlpts[:, 0]) > 0.0,
             ctrlpts[0, 0] == 0.0,
-            ctrlpts[1:,0]==ctrlpts_init[1:,0],
-            ctrlpts[-1,1]==coords[-1,1],
+            ctrlpts[1:, 0] == ctrlpts_init[1:, 0],
+            ctrlpts[-1, 1] == coords[-1, 1],
             t[0] == 0.0,
             t[-1] == 1.0,
         ]
@@ -428,8 +429,8 @@ def test13():
     }
     opti.solver("ipopt", default_options)
 
-    opti.set_initial(t,t_init)
-    opti.set_initial(ctrlpts,ctrlpts_init)
+    opti.set_initial(t, t_init)
+    opti.set_initial(ctrlpts, ctrlpts_init)
 
     sol = opti.solve()
 
@@ -443,7 +444,7 @@ def test13():
     ax = fig.add_subplot(111)
     ax.plot(coords[:, 0], coords[:, 1], label="old")
     ax.plot(pts[:, 0], pts[:, 1], label="fit")
-    ax.plot(ctrlpts[:, 0], ctrlpts[:, 1], "--o",label="ctrlpts")
+    ax.plot(ctrlpts[:, 0], ctrlpts[:, 1], "--o", label="ctrlpts")
     ax.legend()
     plt.show()
 
@@ -451,68 +452,78 @@ def test13():
 def test14():
     from NumOpt.airfoil.bspline import BsplineAirfoil
 
-    af=asb.Airfoil("n63415")
+    af = asb.Airfoil("n63415")
 
-    af_fit=BsplineAirfoil.fit(upper_coordinates=af.upper_coordinates(),lower_coordinates=af.lower_coordinates(),symmetry=False)
+    af_fit = BsplineAirfoil.fit(
+        upper_coordinates=af.upper_coordinates(), lower_coordinates=af.lower_coordinates(), symmetry=False
+    )
 
-    t=np.linspace(0,1,100)
-    coords=af_fit.coordinates(t)
+    t = np.linspace(0, 1, 100)
+    coords = af_fit.coordinates(t)
 
-    import matplotlib.pyplot as plt 
-    fig=plt.figure()
-    ax=fig.add_subplot()
-    ax.plot(af.coordinates[:,0],af.coordinates[:,1],label="old")
-    ax.plot(coords[:,0],coords[:,1],label="fit")
-    ax.plot(af_fit.ctu[:,0],af_fit.ctu[:,1],"--o",label="ctu")
-    ax.plot(af_fit.ctl[:,0],af_fit.ctl[:,1],"--o",label="ctl")
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.plot(af.coordinates[:, 0], af.coordinates[:, 1], label="old")
+    ax.plot(coords[:, 0], coords[:, 1], label="fit")
+    ax.plot(af_fit.ctu[:, 0], af_fit.ctu[:, 1], "--o", label="ctu")
+    ax.plot(af_fit.ctl[:, 0], af_fit.ctl[:, 1], "--o", label="ctl")
     ax.legend()
     plt.show()
 
 
 def test15():
-    from NumOpt.airfoil.kulfan import KulfanAirfoil 
-    af=asb.Airfoil("naca0012").normalize()
+    from NumOpt.airfoil.kulfan import KulfanAirfoil
 
-    af_fit:KulfanAirfoil=KulfanAirfoil.fit(upper_coordinates=af.upper_coordinates(),lower_coordinates=af.lower_coordinates(),symmetry=True)
+    af = asb.Airfoil("naca0012").normalize()
 
-    t=np.linspace(0,1,100)
-    coords=af_fit.coordinates(t)
+    af_fit: KulfanAirfoil = KulfanAirfoil.fit(
+        upper_coordinates=af.upper_coordinates(), lower_coordinates=af.lower_coordinates(), symmetry=True
+    )
 
-    import matplotlib.pyplot as plt 
-    fig=plt.figure()
-    ax=fig.add_subplot()
-    ax.plot(af.coordinates[:,0],af.coordinates[:,1],label="old")
-    ax.plot(coords[:,0],coords[:,1],label="fit")
+    t = np.linspace(0, 1, 100)
+    coords = af_fit.coordinates(t)
+
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.plot(af.coordinates[:, 0], af.coordinates[:, 1], label="old")
+    ax.plot(coords[:, 0], coords[:, 1], label="fit")
     ax.legend()
     plt.show()
+
 
 def test16():
-    from NumOpt.airfoil.kulfan import KulfanAirfoil 
-    af=asb.KulfanAirfoil("n63415")
-    af_fit=KulfanAirfoil(Au=af.upper_weights,Al=af.lower_weights,N1=af.N1,N2=af.N2,Le=af.leading_edge_weight,Te=af.TE_thickness)
-    coords=af_fit.coordinates(np.linspace(0,1,100))
+    from NumOpt.airfoil.kulfan import KulfanAirfoil
 
-    import matplotlib.pyplot as plt 
-    fig=plt.figure()
-    ax=fig.add_subplot()
-    ax.plot(af.coordinates[:,0],af.coordinates[:,1],label="old")
-    ax.plot(coords[:,0],coords[:,1],label="fit")
+    af = asb.KulfanAirfoil("n63415")
+    af_fit = KulfanAirfoil(
+        Au=af.upper_weights, Al=af.lower_weights, N1=af.N1, N2=af.N2, Le=af.leading_edge_weight, Te=af.TE_thickness
+    )
+    coords = af_fit.coordinates(np.linspace(0, 1, 100))
+
+    import matplotlib.pyplot as plt
+
+    fig = plt.figure()
+    ax = fig.add_subplot()
+    ax.plot(af.coordinates[:, 0], af.coordinates[:, 1], label="old")
+    ax.plot(coords[:, 0], coords[:, 1], label="fit")
     ax.legend()
     plt.show()
 
-def test17():
-    opti=cas.Opti()
-    N1=opti.variable(1)
-    N2=opti.variable(1)
 
-    x=0.5
-    y=x**N1*(1-x)*N2
+def test17():
+    opti = cas.Opti()
+    N1 = opti.variable(1)
+    N2 = opti.variable(1)
+
+    x = 0.5
+    y = x**N1 * (1 - x) * N2
 
     opti.minimize(y)
-    opti.subject_to([
-        opti.bounded(0.0,N1,1.0),
-        opti.bounded(0.0,N2,1.0)
-    ])
+    opti.subject_to([opti.bounded(0.0, N1, 1.0), opti.bounded(0.0, N2, 1.0)])
 
     default_options = {
         "ipopt.sb": "yes",
@@ -526,22 +537,22 @@ def test17():
         "ipopt.print_level": 0,
     }
 
-    opti.solver("ipopt",default_options)
+    opti.solver("ipopt", default_options)
 
-    sol=opti.solve()
-
+    sol = opti.solve()
 
 
 def test18():
-    import jax 
-    import jax.numpy as jnp 
+    import jax
+    import jax.numpy as jnp
 
     # @jax.grad
     def func(x):
         return jnp.sin(x)
-    
-    y=func(0.0)
+
+    y = func(0.0)
     print(y)
+
 
 def test19():
     import jax
@@ -553,9 +564,9 @@ def test19():
     # -----------------------------
     # 1️⃣ 物理参数
     # -----------------------------
-    g = 9.81          # 重力加速度 (m/s^2)
-    v0 = 20.0         # 初速度 (m/s)
-    c_d = 0.05        # 阻力系数 (drag coefficient)
+    g = 9.81  # 重力加速度 (m/s^2)
+    v0 = 20.0  # 初速度 (m/s)
+    c_d = 0.05  # 阻力系数 (drag coefficient)
 
     # -----------------------------
     # 2️⃣ 定义动力学系统 (带空气阻力)
@@ -575,15 +586,10 @@ def test19():
     # -----------------------------
     def simulate(theta):
         # 初始条件
-        y0 = jnp.array([
-            0.0,                         # x
-            0.0,                         # y
-            v0 * jnp.cos(theta),         # vx
-            v0 * jnp.sin(theta)          # vy
-        ])
+        y0 = jnp.array([0.0, 0.0, v0 * jnp.cos(theta), v0 * jnp.sin(theta)])  # x  # y  # vx  # vy
 
         # 定义事件函数（落地条件 y = 0）
-        def event_fn(t, y, args,**kwargs):
+        def event_fn(t, y, args, **kwargs):
             return y[1]  # 高度 y
 
         event = diffrax.Event(event_fn, optx.Newton(1e-5, 1e-5, optx.rms_norm))
@@ -594,19 +600,11 @@ def test19():
         saveat = diffrax.SaveAt(t1=True, dense=True)
 
         sol = diffrax.diffeqsolve(
-            term,
-            solver,
-            t0=0.0,
-            t1=10.0,          # 最大模拟时间
-            dt0=0.01,
-            y0=y0,
-            event=event,
-            saveat=saveat,
-            max_steps=4096
+            term, solver, t0=0.0, t1=10.0, dt0=0.01, y0=y0, event=event, saveat=saveat, max_steps=4096  # 最大模拟时间
         )
 
         final_state = sol.ys
-        x_final = final_state[0,0]  # 落地时水平位移
+        x_final = final_state[0, 0]  # 落地时水平位移
         return x_final
 
     # -----------------------------
@@ -627,10 +625,10 @@ def test19():
     # -----------------------------
     res = minimize(
         objective,
-        x0=jnp.array([0.5]),        # 初始猜测（约 30°）
+        x0=jnp.array([0.5]),  # 初始猜测（约 30°）
         method="SLSQP",
         jac=grad_objective,
-        bounds=[(0, jnp.pi / 2)]    # 限制角度在 [0°, 90°]
+        bounds=[(0, jnp.pi / 2)],  # 限制角度在 [0°, 90°]
     )
 
     theta_opt = res.x[0]
@@ -644,37 +642,41 @@ def test19():
     print(f"对应射程 R = {R_opt:.4f} m")
     print(f"优化是否成功: {res.success}, 迭代次数: {res.nit}")
 
-def test20():
-    from scipy.optimize import minimize,OptimizeResult 
-    import jax.numpy as jnp 
-    import jax 
-    import numpy as np 
 
-    class UDP():
+def test20():
+    from scipy.optimize import minimize, OptimizeResult
+    import jax.numpy as jnp
+    import jax
+    import numpy as np
+
+    class UDP:
         def __init__(self):
-            self._func_grad=jax.jacobian(self._func)
-        def _func(self,x):
+            self._func_grad = jax.jacobian(self._func)
+
+        def _func(self, x):
             return jnp.sin(x)
-        
-        def fun(self,x):
-            ret=np.array(self._func(x),dtype="f8")
+
+        def fun(self, x):
+            ret = np.array(self._func(x), dtype="f8")
             return ret
-        
-        def grad(self,x):
-            ret=np.array(self._func_grad(x),dtype="f8")
+
+        def grad(self, x):
+            ret = np.array(self._func_grad(x), dtype="f8")
             return ret[0]
 
-    udp=UDP()
-    sol:OptimizeResult=minimize(
+    udp = UDP()
+    sol: OptimizeResult = minimize(
         fun=udp.fun,
         x0=0.0,
         method="SLSQP",
         jac=udp.grad,
-        bounds=[(0.0,jnp.pi*2.0),],
-        options={"disp":True}
+        bounds=[
+            (0.0, jnp.pi * 2.0),
+        ],
+        options={"disp": True},
     )
 
-    print(sol.x,sol.fun)
+    print(sol.x, sol.fun)
 
 
 def test21():
@@ -682,21 +684,23 @@ def test21():
     import jax.numpy as jnp
     import optimistix as optx
 
-    def func(x,args):
-        x0=x[0]
-        a=args[0]
-        return x0**2-a,
-    
+    def func(x, args):
+        x0 = x[0]
+        a = args[0]
+        return (x0**2 - a,)
+
     def solve_x(a):
-        solver=optx.Newton(rtol=1e-6,atol=1e-6)
-        sol=optx.root_find(func,solver,(1.0,),args=(a,))
+        solver = optx.Newton(rtol=1e-6, atol=1e-6)
+        sol = optx.root_find(func, solver, (1.0,), args=(a,))
         return sol.value[0]
+
     # print(sol.value)
-    dxda=jax.grad(solve_x)
+    dxda = jax.grad(solve_x)
     print(dxda(4.0))
     # solver=optx.Newton(rtol=1e-6,atol=1e-6)
     # sol=optx.root_find(func,solver,(1.0,),args=(4.0,))
     # print(sol.value)
+
 
 def test22():
     import numpy as np
@@ -705,8 +709,10 @@ def test22():
         """
         Entropy–Covariance Guided Evolutionary Optimization (EC-GEO)
         """
-        def __init__(self, func, dim, bounds, pop_size=50, max_iter=200, 
-                    sigma0=0.2, eta_g=0.3, eta_c=0.1, eta_e=0.1, top_k_ratio=0.3):
+
+        def __init__(
+            self, func, dim, bounds, pop_size=50, max_iter=200, sigma0=0.2, eta_g=0.3, eta_c=0.1, eta_e=0.1, top_k_ratio=0.3
+        ):
             self.func = func
             self.dim = dim
             self.bounds = np.array(bounds)
@@ -719,8 +725,7 @@ def test22():
             self.top_k_ratio = top_k_ratio
 
             # 初始化群体
-            self.X = np.random.uniform(self.bounds[:, 0], self.bounds[:, 1], 
-                                    size=(self.pop_size, self.dim))
+            self.X = np.random.uniform(self.bounds[:, 0], self.bounds[:, 1], size=(self.pop_size, self.dim))
             self.fitness = np.apply_along_axis(self.func, 1, self.X)
             self.x_best = self.X[np.argmin(self.fitness)]
             self.f_best = np.min(self.fitness)
@@ -745,7 +750,7 @@ def test22():
             try:
                 g_nat = np.linalg.solve(self.C + 1e-8 * np.eye(self.dim), (self.x_best - self.mean))
             except np.linalg.LinAlgError:
-                g_nat = (self.x_best - self.mean)
+                g_nat = self.x_best - self.mean
 
             # 自适应学习率与步长
             eta_eff = self.eta_g * np.exp(-self.eta_e * delta_H)
@@ -784,7 +789,7 @@ def test22():
 
     def sphere(x):
         """Sphere test function"""
-        return np.sum(x ** 2)
+        return np.sum(x**2)
 
     def rosenbrock(x):
         """Rosenbrock function"""
@@ -806,6 +811,58 @@ def test22():
     optimizer = ECGEO(func=rosenbrock, dim=dim, bounds=bounds, pop_size=60, max_iter=200)
     best_x, best_f = optimizer.optimize()
     print(f"Final best fitness (Rosenbrock): {best_f:.6e}")
+
+
+def test23():
+    def cov(X, Y, base_id, mean=True):
+        xi = X - X[[base_id]]
+        yi = Y - Y[[base_id]]
+        ret = xi.T @ yi
+        if mean:
+            n_samples = X.shape[0]
+            ret = ret / (n_samples - 1)
+        return ret
+
+    x = np.array([[1.0, 2.0], [3.0, 4.0], [4.0, 6.0]], dtype="f8")
+    y = np.array([[10], [20], [30.0]], dtype="f8")
+
+    covxy = cov(x, y, base_id=0).flatten()
+    covxx = cov(x, x, base_id=0)
+    covxx_diag = np.diag(covxx)
+
+    g_approx = covxy / covxx_diag
+
+    print(g_approx)
+
+
+def test24():
+    from NumOpt.optimize.v1 import UDA
+    from pymoo.core.problem import Problem
+
+    class UDP(Problem):
+        def __init__(self, n_var=-1, n_obj=1, n_ieq_constr=0, n_eq_constr=0, xl=None, xu=None, **kwargs):
+            super().__init__(n_var, n_obj, n_ieq_constr, n_eq_constr, xl, xu, **kwargs)
+        def _evaluate(self, x, out, *args, **kwargs):
+            F=np.sum((x-0.5)**2,axis=1)
+            out["F"]=F 
+    
+    udp=UDP(n_var=6,n_obj=1,xl=-10.0,xu=10.0)
+    uda=UDA()
+    uda.setup(problem=udp,termination=("n_gen",100),seed=41)
+    while uda.has_next():
+        pop=uda.ask()
+        uda.evaluator.eval(problem=uda.problem,pop=pop)
+        uda.tell(infills=pop)
+
+def test25():
+    x=np.array([[1.0,1.0,0.0],[1.0,0.9,0.0],[1.0,1.1,0.0]],dtype="f8")
+    # x=x-np.mean(x,axis=0)
+    u,s,vt=np.linalg.svd(x)
+    # 因为s的最后一个特征值接近0，所以这里取两个特征值，
+    # 因此取vt的前两列，那么x被降维成：
+    x_=x@(vt[:2].T)
+    print(x_)
+
 if __name__ == "__main__":
     # test1()
     # test2()
@@ -828,4 +885,7 @@ if __name__ == "__main__":
     # test19()
     # test20()
     # test21()
-    test22()
+    # test22()
+    # test23()
+    # test24()
+    test25()
