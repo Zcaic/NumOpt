@@ -79,7 +79,6 @@ def saveAs(outfile, session: NXOpen.Session, overwrite: False):
     part.SaveAs(outfile.as_posix())
     session.UpdateManager.DoUpdate(markid)
 
-
 if __name__ == "__main__":
     with open("C:/Users/Zcaic/Desktop/hxy_ppt/coords.json", "r") as fin:
         data = json.load(fin)
