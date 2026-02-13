@@ -842,26 +842,361 @@ def test24():
     class UDP(Problem):
         def __init__(self, n_var=-1, n_obj=1, n_ieq_constr=0, n_eq_constr=0, xl=None, xu=None, **kwargs):
             super().__init__(n_var, n_obj, n_ieq_constr, n_eq_constr, xl, xu, **kwargs)
+
         def _evaluate(self, x, out, *args, **kwargs):
-            F=np.sum((x-0.5)**2,axis=1)
-            out["F"]=F 
-    
-    udp=UDP(n_var=6,n_obj=1,xl=-10.0,xu=10.0)
-    uda=UDA()
-    uda.setup(problem=udp,termination=("n_gen",100),seed=41)
+            F = np.sum((x - 0.5) ** 2, axis=1)
+            out["F"] = F
+
+    udp = UDP(n_var=6, n_obj=1, xl=-10.0, xu=10.0)
+    uda = UDA()
+    uda.setup(problem=udp, termination=("n_gen", 100), seed=41)
     while uda.has_next():
-        pop=uda.ask()
-        uda.evaluator.eval(problem=uda.problem,pop=pop)
+        pop = uda.ask()
+        uda.evaluator.eval(problem=uda.problem, pop=pop)
         uda.tell(infills=pop)
 
+
 def test25():
-    x=np.array([[1.0,1.0,0.0],[1.0,0.9,0.0],[1.0,1.1,0.0]],dtype="f8")
+    x = np.array([[1.0, 1.0, 0.0], [1.0, 0.9, 0.0], [1.0, 1.1, 0.0]], dtype="f8")
     # x=x-np.mean(x,axis=0)
-    u,s,vt=np.linalg.svd(x)
+    u, s, vt = np.linalg.svd(x)
     # 因为s的最后一个特征值接近0，所以这里取两个特征值，
     # 因此取vt的前两列，那么x被降维成：
-    x_=x@(vt[:2].T)
+    x_ = x @ (vt[:2].T)
     print(x_)
+
+
+def test26():
+    import matplotlib.pyplot as plt
+
+    import numpy as np
+    from dataclasses import dataclass
+    from typing import Union
+
+    @dataclass
+    class ZeroDAirfoilPolarParameters:
+        """Data class for 1-d airfoil polar.
+
+        Parameters
+        ----------
+        alpha_stall_plus: float, int
+            positive stall angle (deg)
+        alpha_stall_minus: float, int
+            negative stall angle (deg)
+        Cl_stall_plus: float, int
+            Cl at positive stall
+        Cl_stall_minus: float, int
+            Cl at negative stall
+        Cd_stall_plus: float, int
+            Cd at positive stall
+        Cd_stall_minus: float, int
+            Cd at negative stall
+        Cl_0: float, int
+            Cl at zero angle of attack
+        Cd_0: float, int
+            Cd at zero angle of attack
+        Cl_alpha: float, int
+            lift-curve slope
+
+        """
+
+        alpha_stall_plus: Union[float, int]
+        alpha_stall_minus: Union[float, int]
+        Cl_stall_plus: Union[float, int]
+        Cl_stall_minus: Union[float, int]
+        Cd_stall_plus: Union[float, int]
+        Cd_stall_minus: Union[float, int]
+        Cl_0: Union[float, int]
+        Cd_0: Union[float, int]
+        Cl_alpha: Union[float, int]
+
+    class ZeroDAirfoilModel:
+        """Zero-dimensional airfoil model.
+
+
+        Parameters
+        ----------
+        polar_parameters : ZeroDAirfoilPolarParameters
+            Polar parameters for the airfoil.
+
+        """
+
+        def __init__(
+            self,
+            polar_parameters: ZeroDAirfoilPolarParameters,
+        ) -> None:
+            self.pre_process_parameters = self._process_polar_parameters(polar_parameters)
+
+        def _process_polar_parameters(self, polar_parameters):
+
+            # stall angle > 0
+            aoa_stall_p = np.deg2rad(polar_parameters.alpha_stall_plus)
+
+            # Cl at stall > 0
+            Cl_stall_p = polar_parameters.Cl_stall_plus
+
+            # Cd at stall
+            Cd_stall_p = polar_parameters.Cd_stall_plus
+
+            # stall angle < 0
+            aoa_stall_m = np.deg2rad(polar_parameters.alpha_stall_minus)
+
+            # Cl at stall < 0
+            Cl_stall_m = polar_parameters.Cl_stall_minus
+            # Cd at stall
+            Cd_stall_m = polar_parameters.Cd_stall_minus
+
+            # Cl at zero angle of attack
+            Cl_0 = polar_parameters.Cl_0
+
+            # Lift curve slope
+            Cl_alpha = polar_parameters.Cl_alpha
+
+            # Cd at zero angle of attack
+            Cd_0 = polar_parameters.Cd_0
+
+            # K for quadratic lift polar
+            k = 0.5 * ((Cd_stall_p - Cd_0) / (Cl_0 - Cl_stall_p) ** 2 + (Cd_stall_m - Cd_0) / (Cl_0 - Cl_stall_m) ** 2)
+
+            # Smoothing region
+            eps = np.deg2rad(1.5)
+
+            # Viterna Extrapolation
+            AR = 10.0
+            Cd_max = 1.11 + 0.018 * AR
+            A1 = Cd_max / 2
+            B1 = Cd_max
+            A2_p = (
+                (Cl_stall_p - Cd_max * np.sin(aoa_stall_p) * np.cos(aoa_stall_p))
+                * np.sin(aoa_stall_p)
+                / (np.cos(aoa_stall_p) ** 2)
+            )
+            A2_m = (
+                (Cl_stall_m - Cd_max * np.sin(aoa_stall_m) * np.cos(aoa_stall_m))
+                * np.sin(aoa_stall_m)
+                / (np.cos(aoa_stall_m) ** 2)
+            )
+            B2_p = (Cd_stall_p - Cd_max * np.sin(aoa_stall_p) ** 2) / np.cos(aoa_stall_p)
+            B2_m = (Cd_stall_m - Cd_max * np.sin(aoa_stall_m) ** 2) / np.cos(aoa_stall_m)
+
+            # Polynomial Smoothing alpha > 0
+            mat_cl_p = mat_cd_p = np.array(
+                [
+                    [(aoa_stall_p - eps) ** 3, (aoa_stall_p - eps) ** 2, (aoa_stall_p - eps), 1],
+                    [(aoa_stall_p + eps) ** 3, (aoa_stall_p + eps) ** 2, (aoa_stall_p + eps), 1],
+                    [3 * (aoa_stall_p - eps) ** 2, 2 * (aoa_stall_p - eps), 1, 0],
+                    [3 * (aoa_stall_p + eps) ** 2, 2 * (aoa_stall_p + eps), 1, 0],
+                ]
+            )
+
+            lhs_cl_p = np.array(
+                [
+                    [Cl_0 + Cl_alpha * (aoa_stall_p - eps)],
+                    [A1 * np.sin(2 * (aoa_stall_p + eps)) + A2_p * np.cos(aoa_stall_p + eps) ** 2 / np.sin(aoa_stall_p + eps)],
+                    [Cl_alpha],
+                    [
+                        2 * A1 * np.cos(2 * (aoa_stall_p + eps))
+                        - A2_p * (np.cos(aoa_stall_p + eps) * (1 + 1 / (np.sin(aoa_stall_p + eps)) ** 2))
+                    ],
+                ]
+            )
+            coeff_cl_p = np.linalg.solve(mat_cl_p, lhs_cl_p)
+
+            lhs_cd_p = np.array(
+                [
+                    [Cd_0 + k * (Cl_alpha * (aoa_stall_p - eps)) ** 2],
+                    [B1 * np.sin(aoa_stall_p + eps) ** 2 + B2_p * np.cos(aoa_stall_p + eps)],
+                    [2 * k * Cl_alpha * (Cl_alpha * (aoa_stall_p - eps))],
+                    [B1 * np.sin(2 * (aoa_stall_p + eps)) - B2_p * np.sin(aoa_stall_p + eps)],
+                ]
+            )
+            coeff_cd_p = np.linalg.solve(mat_cd_p, lhs_cd_p)
+
+            # Polynomial Smoothing alpha < 0
+            mat_cl_m = mat_cd_m = np.array(
+                [
+                    [(aoa_stall_m - eps) ** 3, (aoa_stall_m - eps) ** 2, (aoa_stall_m - eps), 1],
+                    [(aoa_stall_m + eps) ** 3, (aoa_stall_m + eps) ** 2, (aoa_stall_m + eps), 1],
+                    [3 * (aoa_stall_m - eps) ** 2, 2 * (aoa_stall_m - eps), 1, 0],
+                    [3 * (aoa_stall_m + eps) ** 2, 2 * (aoa_stall_m + eps), 1, 0],
+                ]
+            )
+
+            lhs_cl_m = np.array(
+                [
+                    [A1 * np.sin(2 * (aoa_stall_m - eps)) + A2_m * np.cos(aoa_stall_m - eps) ** 2 / np.sin(aoa_stall_m - eps)],
+                    [Cl_0 + Cl_alpha * (aoa_stall_m + eps)],
+                    [
+                        2 * A1 * np.cos(2 * (aoa_stall_m - eps))
+                        - A2_m * (np.cos(aoa_stall_m - eps) * (1 + 1 / (np.sin(aoa_stall_m - eps)) ** 2))
+                    ],
+                    [Cl_alpha],
+                ]
+            )
+            coeff_cl_m = np.linalg.solve(mat_cl_m, lhs_cl_m)
+
+            lhs_cd_m = np.array(
+                [
+                    [B1 * np.sin(aoa_stall_m - eps) ** 2 + B2_m * np.cos(aoa_stall_m - eps)],
+                    [Cd_0 + k * (Cl_alpha * (aoa_stall_m + eps)) ** 2],
+                    [B1 * np.sin(2 * (aoa_stall_m - eps)) - B2_m * np.sin(aoa_stall_m - eps)],
+                    [2 * k * Cl_alpha * (Cl_alpha * (aoa_stall_m + eps))],
+                ]
+            )
+            coeff_cd_m = np.linalg.solve(mat_cd_m, lhs_cd_m)
+
+            polar_parameters.eps = eps
+            polar_parameters.k = k
+            polar_parameters.aoa_stall_m = aoa_stall_m
+            polar_parameters.aoa_stall_p = aoa_stall_p
+            polar_parameters.A1 = A1
+            polar_parameters.B1 = B1
+            polar_parameters.A2_p = A2_p
+            polar_parameters.A2_m = A2_m
+            polar_parameters.B2_p = B2_p
+            polar_parameters.B2_m = B2_m
+            polar_parameters.coeff_cl_p = coeff_cl_p
+            polar_parameters.coeff_cd_p = coeff_cd_p
+            polar_parameters.coeff_cl_m = coeff_cl_m
+            polar_parameters.coeff_cd_m = coeff_cd_m
+
+            return polar_parameters
+
+        def predict_values(self, AoA_array):
+            aoa = AoA_array.flatten()
+            cond_list = [
+                aoa <= (self.pre_process_parameters.aoa_stall_m - self.pre_process_parameters.eps),
+                (aoa > (self.pre_process_parameters.aoa_stall_m - self.pre_process_parameters.eps))
+                & (aoa <= (self.pre_process_parameters.aoa_stall_m + self.pre_process_parameters.eps)),
+                (aoa > (self.pre_process_parameters.aoa_stall_m + self.pre_process_parameters.eps))
+                & (aoa <= (self.pre_process_parameters.aoa_stall_p - self.pre_process_parameters.eps)),
+                (aoa > (self.pre_process_parameters.aoa_stall_p - self.pre_process_parameters.eps))
+                & (aoa <= (self.pre_process_parameters.aoa_stall_p + self.pre_process_parameters.eps)),
+                aoa > (self.pre_process_parameters.aoa_stall_p + self.pre_process_parameters.eps),
+            ]
+
+            Cl_fun_list = [
+                lambda aoa: self.pre_process_parameters.A1 * np.sin(2 * aoa)
+                + self.pre_process_parameters.A2_m * np.cos(aoa) ** 2 / np.sin(aoa),
+                lambda aoa: self.pre_process_parameters.coeff_cl_m[3]
+                + self.pre_process_parameters.coeff_cl_m[2] * aoa
+                + self.pre_process_parameters.coeff_cl_m[1] * aoa**2
+                + self.pre_process_parameters.coeff_cl_m[0] * aoa**3,
+                lambda aoa: self.pre_process_parameters.Cl_0 + self.pre_process_parameters.Cl_alpha * aoa,
+                lambda aoa: self.pre_process_parameters.coeff_cl_p[3]
+                + self.pre_process_parameters.coeff_cl_p[2] * aoa
+                + self.pre_process_parameters.coeff_cl_p[1] * aoa**2
+                + self.pre_process_parameters.coeff_cl_p[0] * aoa**3,
+                lambda aoa: self.pre_process_parameters.A1 * np.sin(2 * aoa)
+                + self.pre_process_parameters.A2_p * np.cos(aoa) ** 2 / np.sin(aoa),
+            ]
+
+            Cd_fun_list = [
+                lambda aoa: self.pre_process_parameters.B1 * np.sin(aoa) ** 2 + self.pre_process_parameters.B2_m * np.cos(aoa),
+                lambda aoa: self.pre_process_parameters.coeff_cd_m[3]
+                + self.pre_process_parameters.coeff_cd_m[2] * aoa
+                + self.pre_process_parameters.coeff_cd_m[1] * aoa**2
+                + self.pre_process_parameters.coeff_cd_m[0] * aoa**3,
+                lambda aoa: self.pre_process_parameters.Cd_0
+                + self.pre_process_parameters.k * (self.pre_process_parameters.Cl_alpha * aoa) ** 2,
+                lambda aoa: self.pre_process_parameters.coeff_cd_p[3]
+                + self.pre_process_parameters.coeff_cd_p[2] * aoa
+                + self.pre_process_parameters.coeff_cd_p[1] * aoa**2
+                + self.pre_process_parameters.coeff_cd_p[0] * aoa**3,
+                lambda aoa: self.pre_process_parameters.B1 * np.sin(aoa) ** 2 + self.pre_process_parameters.B2_p * np.cos(aoa),
+            ]
+
+            Cl = np.piecewise(
+                aoa,
+                cond_list,
+                Cl_fun_list,
+            )
+
+            Cd = np.piecewise(aoa, cond_list, Cd_fun_list)
+
+            return Cl, Cd
+
+        def predict_derivatives(self, AoA_array):
+            aoa = AoA_array.flatten()
+            cond_list = [
+                aoa <= (self.pre_process_parameters.aoa_stall_m - self.pre_process_parameters.eps),
+                (aoa > (self.pre_process_parameters.aoa_stall_m - self.pre_process_parameters.eps))
+                & (aoa <= (self.pre_process_parameters.aoa_stall_m + self.pre_process_parameters.eps)),
+                (aoa > (self.pre_process_parameters.aoa_stall_m + self.pre_process_parameters.eps))
+                & (aoa <= (self.pre_process_parameters.aoa_stall_p - self.pre_process_parameters.eps)),
+                (aoa > (self.pre_process_parameters.aoa_stall_p - self.pre_process_parameters.eps))
+                & (aoa <= (self.pre_process_parameters.aoa_stall_p + self.pre_process_parameters.eps)),
+                aoa > (self.pre_process_parameters.aoa_stall_p + self.pre_process_parameters.eps),
+            ]
+
+            dCl_daoa_fun_list = [
+                lambda aoa: 2 * self.pre_process_parameters.A1 * np.cos(2 * aoa)
+                - self.pre_process_parameters.A2_m * (np.cos(aoa) * (1 + 1 / (np.sin(aoa)) ** 2)),
+                lambda aoa: self.pre_process_parameters.coeff_cl_m[2]
+                + 2 * self.pre_process_parameters.coeff_cl_m[1] * aoa
+                + 3 * self.pre_process_parameters.coeff_cl_m[0] * aoa**2,
+                lambda aoa: self.pre_process_parameters.Cl_alpha,
+                lambda aoa: self.pre_process_parameters.coeff_cl_p[2]
+                + 2 * self.pre_process_parameters.coeff_cl_p[1] * aoa
+                + 3 * self.pre_process_parameters.coeff_cl_p[0] * aoa**2,
+                lambda aoa: 2 * self.pre_process_parameters.A1 * np.cos(2 * aoa)
+                - self.pre_process_parameters.A2_p * (np.cos(aoa) * (1 + 1 / (np.sin(aoa)) ** 2)),
+            ]
+
+            dCd_daoa_fun_list = [
+                lambda aoa: self.pre_process_parameters.B1 * np.sin(2 * aoa) - self.pre_process_parameters.B2_m * np.sin(aoa),
+                lambda aoa: self.pre_process_parameters.coeff_cd_m[2]
+                + 2 * self.pre_process_parameters.coeff_cd_m[1] * aoa
+                + 3 * self.pre_process_parameters.coeff_cd_m[0] * aoa**2,
+                lambda aoa: 2
+                * self.pre_process_parameters.k
+                * self.pre_process_parameters.Cl_alpha
+                * (self.pre_process_parameters.Cl_alpha * aoa),
+                lambda aoa: self.pre_process_parameters.coeff_cd_p[2]
+                + 2 * self.pre_process_parameters.coeff_cd_p[1] * aoa
+                + 3 * self.pre_process_parameters.coeff_cd_p[0] * aoa**2,
+                lambda aoa: self.pre_process_parameters.B1 * np.sin(2 * aoa) - self.pre_process_parameters.B2_p * np.sin(aoa),
+            ]
+
+            dCl_daoa = np.piecewise(
+                aoa,
+                cond_list,
+                dCl_daoa_fun_list,
+            )
+
+            dCd_daoa = np.piecewise(
+                aoa,
+                cond_list,
+                dCd_daoa_fun_list,
+            )
+
+            return dCl_daoa, dCd_daoa
+
+    af = ZeroDAirfoilModel(
+        polar_parameters=ZeroDAirfoilPolarParameters(
+            alpha_stall_minus=-10.0,
+            alpha_stall_plus=15.0,
+            Cl_stall_minus=-1.0,
+            Cl_stall_plus=1.5,
+            Cd_stall_minus=0.02,
+            Cd_stall_plus=0.06,
+            Cl_0=0.5,
+            Cd_0=0.008,
+            Cl_alpha=5.1566,
+        )
+    )
+    alpha_deg = np.linspace(-40.0, 40.0, 20)
+    alpha_rad = np.deg2rad(alpha_deg)
+    cl, cd = af.predict_values(alpha_rad)
+    fig = plt.figure()
+    ax = fig.add_subplot(121)
+    ax.plot(alpha_deg, cl, label="CL")
+    ax.legend()
+    ax = fig.add_subplot(122)
+    ax.plot(alpha_deg, cd, label="CD")
+    ax.legend()
+    plt.show()
+
 
 if __name__ == "__main__":
     # test1()
@@ -888,4 +1223,5 @@ if __name__ == "__main__":
     # test22()
     # test23()
     # test24()
-    test25()
+    # test25()
+    test26()
