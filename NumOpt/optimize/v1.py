@@ -62,11 +62,13 @@ class UDA(Algorithm):
         self.survial = FitnessSurvival()
 
     def _setup(self, problem, **kwargs):
-        return super()._setup(problem, **kwargs)
+        super()._setup(problem, **kwargs)
+        self.ndim=self.problem.n_var
 
     def _initialize_infill(self):
-        return self.initialization.do(self.problem, self.pop_size, algorithm=self, random_state=self.random_state)
-
+        # return self.initialization.do(self.problem, self.pop_size, algorithm=self, random_state=self.random_state)
+        return self.Chebyshev_map_init()
+    
     @staticmethod
     def cov(X, Y, idx, mean=True):
         xi = X - X[[idx]]
@@ -88,7 +90,6 @@ class UDA(Algorithm):
     def _infill(self):
         X = self.pop.get("X")
         F = self.pop.get("F")
-        ndim = self.problem.n_var
         dist = squareform(pdist(X))
 
         new_X = []
@@ -111,12 +112,12 @@ class UDA(Algorithm):
                 main_better_eigvals, main_better_vec = self._get_main_vector(better_dX, include=0.99)
             else:
                 main_better_eigvals = np.empty((0,))
-                main_better_vec = np.empty((0, ndim))
+                main_better_vec = np.empty((0, self.ndim))
             if worse_dX.shape[0] != 0:
                 main_worse_eigvals, main_worse_vec = self._get_main_vector(worse_dX, include=0.99)
             else:
                 main_worse_eigvals = np.empty((0,))
-                main_worse_vec = np.empty((0, ndim))
+                main_worse_vec = np.empty((0, self.ndim))
 
             better_vec_or_worse = self.select_better_or_worse(better_num=better_dX.shape[0], worse_num=worse_dX.shape[0])
             if better_vec_or_worse:  # better
@@ -163,6 +164,19 @@ class UDA(Algorithm):
 
         self.pop[has_improved] = off[has_improved]
         self.survial.do(self.problem, self.pop)
+
+    def Chebyshev_map_init(self):
+        p=self.random_state.random(size=(self.pop_size,self.ndim))
+        for i in range(1,self.pop_size):
+            for j in range(self.ndim):
+                if p[i-1,j]<0.5:
+                    p[i,j]=2*p[i-1,j]
+                else:
+                    p[i,j]=2*(1-p[i-1,j])
+        xl, xu = self.problem.bounds()
+        popX=xl+p*(xu-xl)
+        pop=Population.new(X=popX)
+        return pop
 
     def gen_weights(self, num, method="sort"):
         if method == "sort":

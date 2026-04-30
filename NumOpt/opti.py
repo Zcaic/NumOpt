@@ -37,6 +37,8 @@ class Opti(asb.Opti):
             "ipopt.fast_step_computation": "yes",
             "detect_simple_bounds": detect_simple_bounds,
             "expand": expand,
+            "ipopt.mu_strategy": "monotone", 
+            "ipopt.start_with_resto": "yes"
         }
         if jit:
             default_options["jit"] = True

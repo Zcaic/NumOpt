@@ -883,6 +883,12 @@ def test26():
         uda.evaluator.eval(problem=uda.problem,pop=pop)
         uda.tell(infills=pop)
 
+def test27():
+    from joblib import Parallel,delayed
+    import numpy as np 
+
+    parallel=Parallel(n_jobs=2)
+    print(parallel(delayed(np.sqrt)(i**2) for i in range(10)))
 
 if __name__ == "__main__":
     # test1()
@@ -910,4 +916,5 @@ if __name__ == "__main__":
     # test23()
     # test24()
     # test25()
-    test26()
+    # test26()
+    test27()
