@@ -60,87 +60,114 @@ class UDA(Algorithm):
         self.initialization = Initialization(sampling)
         self.pop_size = pop_size
         self.survial = FitnessSurvival()
+        self.gamma=1.0
+        self.p_per=0.0
+
+        self.history=Population.empty()
 
     def _setup(self, problem, **kwargs):
         super()._setup(problem, **kwargs)
         self.ndim=self.problem.n_var
 
     def _initialize_infill(self):
-        # return self.initialization.do(self.problem, self.pop_size, algorithm=self, random_state=self.random_state)
-        return self.Chebyshev_map_init()
+        return self.initialization.do(self.problem, self.pop_size, algorithm=self, random_state=self.random_state)
+        # return self.Chebyshev_map_init()
     
     def _initialize_advance(self, infills=None, **kwargs):
-        # self.pop = self.survial.do(self.problem, infills)
         infills = self.survial.do(self.problem, infills)
         self.pop = infills
-        # X=infills.get("X")
-        # F=infills.get("Y")
-        # pop_size=infills.shape[0]
+
+        self.history=Population.merge(self.history,self.pop)
+
 
     def _infill(self):
         X = self.pop.get("X")
         F = self.pop.get("F")
-        dist = squareform(pdist(X))
+        # dist = squareform(pdist(X))
+        hist_X,hist_F=self.history.get("X","F")
 
         new_X = []
         for i in range(self.pop_size):
             iX = X[[i], :]
             iF = F[[i], :]
 
-            delta_F = F - iF
-            delta_X = X - iX
+            delta_F = hist_F - iF
+            delta_X = hist_X - iX
 
             mask = (delta_F < 0.0).flatten()
             better_dX = delta_X[mask, :]
             better_dF = delta_F[mask, :]
 
-            mask = (delta_F > 0.0).flatten()
+            mask = ~mask
             worse_dX = delta_X[mask, :]
             worse_dF = delta_F[mask, :]
 
             if better_dX.shape[0] != 0:
-                main_better_eigvals, main_better_vec = self._get_main_vector(better_dX, include=0.99)
+                ind=np.argsort(better_dF*-1,axis=0).flatten()
+                weight=np.arange(1,better_dF.shape[0]+1)[ind]
+                main_better_eigvals, main_better_vec = self.obtain_subspace_orthonormal_basis(better_dX, weight=weight,tau=0.95)
             else:
                 main_better_eigvals = np.empty((0,))
                 main_better_vec = np.empty((0, self.ndim))
             if worse_dX.shape[0] != 0:
-                main_worse_eigvals, main_worse_vec = self._get_main_vector(worse_dX, include=0.99)
+                ind=np.argsort(worse_dF,axis=0).flatten()
+                weight=np.arange(1,worse_dF.shape[0]+1)[ind]
+                main_worse_eigvals, main_worse_vec = self.obtain_subspace_orthonormal_basis(worse_dX, weight=weight,tau=0.95)
             else:
                 main_worse_eigvals = np.empty((0,))
                 main_worse_vec = np.empty((0, self.ndim))
 
-            better_vec_or_worse = self.select_better_or_worse(better_num=better_dX.shape[0], worse_num=worse_dX.shape[0])
-            if better_vec_or_worse:  # better
+
+            num_better_lambda=main_better_eigvals.shape[0]
+            num_worse_lambda=main_worse_eigvals.shape[0]
+
+            if num_better_lambda==0:
+                z=self.random_state.random(size=(num_worse_lambda,1))
+                vec_w=main_worse_vec@(np.diag(np.sqrt(main_worse_eigvals))@z)
+                vec_final=vec_w/(np.linalg.norm(vec_w,axis=0)+1e-12)
+                sss=np.sum(vec_final**2)
+                L=worse_dX@vec_final
+                step=-self.random_state.random()*np.max(np.abs(L))
+
+
+            else:
+                z=self.random_state.random(size=(num_better_lambda,1))
+                vec_b=main_better_vec@(np.diag(np.sqrt(main_better_eigvals))@z)
+                if num_worse_lambda==0:
+                    vec_w=0.0
+                else:
+                    vec_w=main_worse_vec@(main_worse_vec.T@vec_b)
+                vec_final=vec_b-self.gamma*vec_w
+                vec_final=vec_final/(np.linalg.norm(vec_final,axis=0)+1e-12)
+                sss=np.sum(vec_final**2)
+
+                L=better_dX@vec_final
+                step=self.random_state.random()*np.max(np.abs(L))
+
+            if self.p_per>self.random_state.random():
                 ...
-            else:  # worse
-                num_vec = main_worse_vec.shape[0]
-                weights=self.gen_weights(num_vec)
-                tot_vec=np.sum(main_worse_vec*weights,axis=0,keepdims=True)
-                project_step=worse_dX@tot_vec
-                
+            else:
+                new_iX=iX+step*vec_final.T
 
+                # fig=plt.figure()
+                # ax=fig.add_subplot(111)
+                # ax.plot(hist_X[:,0],hist_X[:,1],"o",label="pop")
+                # ax.plot(iX[:,0],iX[:,1],"*",markersize=10,label="current pt")
+                # ax.plot(5.5,5.5,"^",markersize=10,label="opt")
+                # ax.plot(new_iX[:,0],new_iX[:,1],"+",markersize=10,label="next")
+                # ax.legend()
+                # plt.show()
+                # plt.close()
 
+            new_X.append(new_iX)
 
-            project_step = delta_X @ main_better_vec
-            project_step = np.sort(project_step, axis=0)[::-1]
-            idx = int(np.floor(0.1 * delta_X.shape[0]))
-            main_step = project_step[idx, :]
-
-            selecte_id = self.roulette_wheel_selection(main_better_eigvals)
-            selecte_vec = main_better_vec[:, selecte_id]
-            selecte_step = main_step[selecte_id]
-
-            dx = self.random_state.random() * selecte_step * selecte_vec
-            new_ix = ix + dx
-            new_X.append(new_ix)
-
-        new_X = np.array(new_X)
+        new_X = np.vstack(new_X)
 
         if self.problem.has_bounds():
             # off = set_to_bounds_if_outside(off, *self.problem.bounds())
-            off = repair_random_init(off, X, *self.problem.bounds(), random_state=self.random_state)
+            new_X = repair_random_init(new_X, X, *self.problem.bounds(), random_state=self.random_state)
 
-        off = Population.new(X=off)
+        off = Population.new(X=new_X)
 
         off = self.repair.do(self.problem, off)
         return off
@@ -154,6 +181,8 @@ class UDA(Algorithm):
 
         self.pop[has_improved] = off[has_improved]
         self.survial.do(self.problem, self.pop)
+
+        self.history=Population.merge(self.history,off[has_improved])
 
     def Chebyshev_map_init(self):
         p=self.random_state.random(size=(self.pop_size,self.ndim))
@@ -208,6 +237,7 @@ class UDA(Algorithm):
     def pca(self,dx,weight,correct_orientation=False):
         std = np.linalg.norm(dx, axis=1, keepdims=True)
         dx = dx / (std + 1e-12)
+        sss=np.sum(dx**2,axis=1)
         weight=weight/np.sum(weight)
         dx_scale=np.diag(np.sqrt(weight))@dx 
         cov=dx_scale.T@dx_scale 
@@ -219,18 +249,40 @@ class UDA(Algorithm):
         else:
             return eigenvalues,eigenvectors
     
-    def obtain_subspace_orthonormal_basis(self,dx,weight,tau=0.99,kmax=20):
-        eigenvalues,eigenvectors_correct =self.pca(dx,weight)
+    def obtain_subspace_orthonormal_basis(self,dx,weight,tau=0.95):
+        eigenvalues,eigenvectors_correct =self.pca(dx,weight,correct_orientation=True)
         sort_idx = np.argsort(eigenvalues)[::-1]
         sort_eigenvalues = eigenvalues[sort_idx]
         sort_eigenvectors = eigenvectors_correct[:, sort_idx]
 
         total_energy = np.sum(sort_eigenvalues)
         k = np.argmax(np.cumsum(sort_eigenvalues) > tau * total_energy) + 1
-        k=np.minimum(k,kmax)
+        k=np.minimum(k,self.ndim-1)
         
         basis_eigvals = sort_eigenvalues[:k]
         basis_vec = sort_eigenvectors[:, :k]
         return basis_eigvals,basis_vec
 
+    def gen_orthogonal_complement(self,U):
+        xi=self.random_state.random(size=(self.ndim,1))
+        proj_xi=xi-U@U.T@xi
+        return proj_xi
 
+
+if __name__=="__main__":
+    import matplotlib.pyplot as plt
+    plt.ioff()
+
+    class UDP(Problem):
+        def __init__(self, n_var=2, n_obj=1, n_ieq_constr=0, n_eq_constr=0, xl=-10.0, xu=10.0, **kwargs):
+            super().__init__(n_var, n_obj, n_ieq_constr, n_eq_constr, xl, xu, **kwargs)
+        def _evaluate(self, x, out, *args, **kwargs):
+            out["F"]=np.sum((x-5.5)**2,axis=1,keepdims=True)
+    
+    uda=UDA(pop_size=50)
+    uda.setup(problem=UDP(),termination=("n_gen",100),seed=10)
+    while uda.has_next():
+        pop=uda.ask()
+        uda.evaluator.eval(problem=uda.problem,pop=pop)
+        uda.tell(infills=pop)
+        print(uda.opt.get("X"))

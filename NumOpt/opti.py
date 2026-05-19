@@ -2,7 +2,7 @@ import aerosandbox.numpy as anp
 import aerosandbox as asb 
 import numpy as np 
 import casadi as cas
-from typing import Callable, Any, Dict
+from typing import Callable, Any, Dict,Literal
 from .cprint import cprint_yellow
 
 # def trape(y, x):
@@ -25,6 +25,8 @@ class Opti(asb.Opti):
         jit: bool = False,
         detect_simple_bounds: bool = False,
         expand: bool = True,
+        mu_strategy:Literal["monotone","adaptive"]="adaptive",
+        start_with_resto:Literal["yes","no"]="no",
         options: Dict = None,
     ):
         if options is None:
@@ -37,8 +39,8 @@ class Opti(asb.Opti):
             "ipopt.fast_step_computation": "yes",
             "detect_simple_bounds": detect_simple_bounds,
             "expand": expand,
-            "ipopt.mu_strategy": "monotone", 
-            "ipopt.start_with_resto": "yes"
+            "ipopt.mu_strategy": mu_strategy, 
+            "ipopt.start_with_resto": start_with_resto
         }
         if jit:
             default_options["jit"] = True
