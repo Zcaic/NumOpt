@@ -1,6 +1,6 @@
-import aerosandbox.numpy as anp
+# import aerosandbox.numpy as anp
 import aerosandbox as asb 
-import numpy as np 
+# import numpy as np 
 import casadi as cas
 from typing import Callable, Any, Dict,Literal
 from .cprint import cprint_yellow
@@ -16,7 +16,7 @@ from .cprint import cprint_yellow
 
 
 class Opti(asb.Opti):
-    def solver(
+    def ipopt_solver(
         self,
         max_iter: int = 1000,
         max_runtime: float = 1e20,
