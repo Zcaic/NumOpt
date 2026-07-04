@@ -247,46 +247,57 @@ class CombineAirfoil:
 #         curve = self._bspline(u)
 #         return curve
 class BsplineDistribution(Bspline):
+    def get_u_from_x(self, x):
+        opti = Opti()
+        u = opti.variable(init_guess=x / (np.max(x) - np.min(x)), lower_bound=0.0, upper_bound=1.0)
+
+        curve = self.__call__(u)
+
+        opti.subject_to([curve[:, 0] == x])
+
+        opti.ipopt_solver(verbose=False)
+        sol = opti.solve()
+
+        return sol(u)
 
     @staticmethod
     def fit(data, nct, degree=3):
-
         opti = Opti()
 
         xdata = data[:, 0]
         ydata = data[:, 1]
-        ctx = np.linspace(xdata[0], xdata[-1], nct)
+        
+        cts_init=np.empty((nct,2))
+        cts_init[:,0]=np.linspace(xdata[0],xdata[-1],nct)
+        cts_init[:,1]=np.max(ydata)
+        
+        cts_x=opti.variable(init_guess=cts_init[:,0])
+        cts_y=opti.variable(init_guess=cts_init[:,1])
+        cts=cas.hcat((cts_x,cts_y))
+        u=opti.variable(init_guess=np.linspace(0,1,data.shape[0]),lower_bound=0.0,upper_bound=1.0)
 
-        cty = opti.variable(init_guess=np.linspace(ydata[0],ydata[-1],nct))
-        u = opti.variable(init_guess=np.linspace(0, 1, data.shape[0]), lower_bound=0.0, upper_bound=1.0)
 
-        cts = cas.hcat((ctx, cty))
-        sp = BsplineDistribution(ctrlpts=cts, degree=degree)
+        sp=BsplineDistribution(ctrlpts=cts,degree=degree)
+        curve=sp(u)
 
-        curve = sp(u)
-
-        dist = curve[:,1] - ydata
-        residual = cas.sum(dist**2)
-
-        opti.subject_to(
-            [
-                curve[:, 0] == xdata,
-                # curve[:, 1] == ydata,
-                # cas.diff(u) > 0.0,
-                # u[0, 0] == 0.0,
-                # u[-1, 0] == 1.0,
-                # cty[0, 0] == ydata[0],
-                # cty[-1, 0] == ydata[-1],
-            ]
-        )
+        opti.subject_to([
+            cts_x==np.linspace(xdata[0],xdata[-1],nct),
+            cts_y[0,0]==ydata[0],
+            cts_y[-1,0]==ydata[-1],
+            u[0,0]==0.0,
+            u[1,0]==1.0
+        ])
+        
+        dist=(curve-data)**2
+        residual=cas.sum(dist)
 
         opti.minimize(residual)
-        opti.ipopt_solver(max_iter=2000)
-        sol = opti.solve()
 
-        cts = sol(cts)
+        opti.ipopt_solver()
+        sol=opti.solve()
+        cts=sol(cts)
+
         return BsplineDistribution(ctrlpts=cts, degree=degree)
-
 
     def get_y(self, x):
         opti = Opti()
@@ -902,7 +913,7 @@ def test06():
 
     data = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 3.0], [4.0, 4.0], [5.0, 2.0], [7.0, 0.0]])
 
-    sp = BsplineDistribution.fit(data=data, nct=8, degree=3)
+    sp = BsplineDistribution.fit(data=data, nct=10, degree=3)
     u = np.linspace(0, 1, 100)
     curve = sp(u)
 
