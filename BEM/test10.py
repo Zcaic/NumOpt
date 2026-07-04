@@ -2,11 +2,13 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 # from scipy.optimize.elementwise import find_root
-from scipy.optimize import root_scalar
-from scipy.interpolate import interp1d
+from scipy.optimize import root_scalar, curve_fit
+from scipy.interpolate import interp1d, BSpline
 from dataclasses import dataclass
 import re
 import io
+from NumOpt.airfoil.bspline import Bspline
+from NumOpt import Opti, cas
 
 # import aerosandbox.numpy as anp
 # import aerosandbox as asb
@@ -157,7 +159,7 @@ class AirfoilEvaluator(ABC):
         return alphafull, clfull, cdfull
 
 
-class FileAirfoil:
+class FileAirfoil(AirfoilEvaluator):
     def __init__(self, csvfile):
         # self.air_data = np.loadtxt(csvfile, ndmin=2)
         self.air_data = self.read_af_cfd(csvfile)
@@ -194,6 +196,110 @@ class FileAirfoil:
                 break
         data = np.loadtxt(io.StringIO("".join(content[idx_data:])), ndmin=2)
         return data
+
+
+class CombineAirfoil:
+    def __init__(self, af_list: list[AirfoilEvaluator], r_list):
+        self.af_list = af_list
+        self.r_list = r_list
+
+    def __call__(self, Alpha, Reynold, Mach, Radius):
+        if Radius < self.r_list[0]:
+            return self.af_list[0](Alpha=Alpha, Reynold=Reynold, Mach=Mach)
+        elif Radius > self.r_list[-1]:
+            return self.af_list[-1](Alpha=Alpha, Reynold=Reynold, Mach=Mach)
+        else:
+            flag = self.r_list - Radius
+            flag = flag[:-1] * flag[1:]
+            idx: int = np.where(flag <= 0)[0][0]
+
+            r_left = self.r_list[idx]
+            r_right = self.r_list[idx + 1]
+            af_left = self.af_list[idx]
+            af_right = self.af_list[idx + 1]
+            w = (Radius - r_left) / (r_right - r_left)
+
+            cl_left, cd_left = af_left(Alpha=Alpha, Reynold=Reynold, Mach=Mach)
+            cl_right, cd_right = af_right(Alpha=Alpha, Reynold=Reynold, Mach=Mach)
+
+            cl = (1 - w) * cl_left + w * cl_right
+            cd = (1 - w) * cd_left + w * cd_right
+
+            return cl, cd
+
+
+# class BsplineDistribution:
+#     def __init__(self, control_points, degree=3):
+#         self.cts = control_points
+#         if self.cts.ndim != 2:
+#             raise ValueError("control_points must be shape=(n,2) ")
+#         self.ncts = self.cts.shape[0]
+
+#         self.k = degree
+#         if self.k > self.ncts - 1:
+#             raise ValueError("degree must <= ncts ")
+
+#         self.knots = np.concatenate((np.zeros(self.k), np.linspace(0, 1, self.ncts - self.k + 1), np.ones(self.k)))
+#         self._bspline = BSpline(t=self.knots, c=self.cts, k=self.k)
+
+
+#     def __call__(self, u):
+#         curve = self._bspline(u)
+#         return curve
+class BsplineDistribution(Bspline):
+
+    @staticmethod
+    def fit(data, nct, degree=3):
+
+        opti = Opti()
+
+        xdata = data[:, 0]
+        ydata = data[:, 1]
+        ctx = np.linspace(xdata[0], xdata[-1], nct)
+
+        cty = opti.variable(init_guess=np.linspace(ydata[0],ydata[-1],nct))
+        u = opti.variable(init_guess=np.linspace(0, 1, data.shape[0]), lower_bound=0.0, upper_bound=1.0)
+
+        cts = cas.hcat((ctx, cty))
+        sp = BsplineDistribution(ctrlpts=cts, degree=degree)
+
+        curve = sp(u)
+
+        dist = curve[:,1] - ydata
+        residual = cas.sum(dist**2)
+
+        opti.subject_to(
+            [
+                curve[:, 0] == xdata,
+                # curve[:, 1] == ydata,
+                # cas.diff(u) > 0.0,
+                # u[0, 0] == 0.0,
+                # u[-1, 0] == 1.0,
+                # cty[0, 0] == ydata[0],
+                # cty[-1, 0] == ydata[-1],
+            ]
+        )
+
+        opti.minimize(residual)
+        opti.ipopt_solver(max_iter=2000)
+        sol = opti.solve()
+
+        cts = sol(cts)
+        return BsplineDistribution(ctrlpts=cts, degree=degree)
+
+
+    def get_y(self, x):
+        opti = Opti()
+        u = opti.variable(init_guess=np.linspace(0, 1, len(x)), lower_bound=0, upper_bound=1)
+
+        curve = self.__call__(u)
+
+        opti.subject_to([u[0, 0] == 0.0, u[-1, 0] == 1.0, cas.diff(u) > 0.0, curve[:, 0] == x])
+
+        opti.ipopt_solver()
+        sol = opti.solve()
+        curve = sol(curve)
+        return curve
 
 
 class Section:
@@ -379,7 +485,7 @@ class Section:
 
 
 class Blade:
-    def __init__(self, Rtip, Rhub, Nb, sections: list[Section]):
+    def __init__(self, Rtip, Rhub, Nb, chord_distribution, twist_distribution, pitch):
         self.Rtip = Rtip
         self.Rhub = Rhub
         self.Nb = Nb
@@ -456,6 +562,8 @@ def test02():
 
     secs = [Section(af=FileAirfoil("./pyBEMT/pybemt/airfoils/CLARKY.dat"), theta=theta, r=r, b=b) for theta, r, b in zip(pitchs, rs, chords)]
     blade = Blade(Rhub=Rhub, Rtip=Rtip, Nb=Nb, sections=secs)
+
+    # blade=Blade(Rhub=Rhub,Rtip=Rtip,Nb=Nb,chord_distribution,twist_distribution,pitch)
 
     ret_list = []
     vinf_list = np.linspace(1.0, 44.0, 20)
@@ -756,8 +864,75 @@ def test04():
             plt.show()
 
 
+def test05():
+    import matplotlib.pyplot as plt
+    import scienceplots
+
+    cts = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 3.0], [4.0, 4.0], [5.0, 2.0], [4.0, 0.0]])
+
+    sp = BsplineDistribution(ctrlpts=cts, degree=3)
+    u = np.linspace(0, 1, 100)
+    curve = sp(u)
+
+    with plt.style.context(["science", "nature", "high-vis", "no-latex"]):
+        with plt.rc_context(
+            {
+                "axes.linewidth": 1,
+                "lines.linewidth": 2,
+                "axes.labelsize": 15,
+                "xtick.labelsize": 10,
+                "ytick.labelsize": 10,
+                "axes.grid": True,
+                "axes.grid.which": "both",
+                "grid.linestyle": "--",
+                # "figure.subplot.wspace":0.5
+            }
+        ):
+            fig = plt.figure(figsize=(6, 5))
+            ax = fig.add_subplot(111)
+            ax.plot(curve[:, 0], curve[:, 1], color="magenta", label="interp")
+            ax.plot(cts[:, 0], cts[:, 1], "--go", label="cts", markersize=6, markerfacecolor="b", markeredgecolor="b")
+            ax.legend(fontsize=15)
+            plt.show()
+
+
+def test06():
+    import matplotlib.pyplot as plt
+    import scienceplots
+
+    data = np.array([[0.0, 0.0], [1.0, 1.0], [2.0, 3.0], [4.0, 4.0], [5.0, 2.0], [7.0, 0.0]])
+
+    sp = BsplineDistribution.fit(data=data, nct=8, degree=3)
+    u = np.linspace(0, 1, 100)
+    curve = sp(u)
+
+    with plt.style.context(["science", "nature", "high-vis", "no-latex"]):
+        with plt.rc_context(
+            {
+                "axes.linewidth": 1,
+                "lines.linewidth": 2,
+                "axes.labelsize": 15,
+                "xtick.labelsize": 10,
+                "ytick.labelsize": 10,
+                "axes.grid": True,
+                "axes.grid.which": "both",
+                "grid.linestyle": "--",
+                # "figure.subplot.wspace":0.5
+            }
+        ):
+            fig = plt.figure(figsize=(6, 5))
+            ax = fig.add_subplot(111)
+            ax.plot(curve[:, 0], curve[:, 1], color="magenta", label="interp")
+            ax.plot(data[:, 0], data[:, 1], "go", label="exp", markersize=6, markerfacecolor="b", markeredgecolor="b")
+            ax.plot(sp.ctrlpts[:, 0], sp.ctrlpts[:, 1], "--ro", label="cts", markersize=6)
+            ax.legend(fontsize=15)
+            plt.show()
+
+
 if __name__ == "__main__":
     # test01()
-    test02()
+    # test02()
     # test03()
     # test04()
+    # test05()
+    test06()

@@ -1,4 +1,4 @@
-from ..opti import asb, anp, cas, np
+from ..opti import cas, np
 
 
 class Bspline:
