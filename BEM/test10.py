@@ -1,14 +1,16 @@
 import numpy as np
 from abc import ABC, abstractmethod
+from typing import Union
 
 # from scipy.optimize.elementwise import find_root
-from scipy.optimize import root_scalar, curve_fit
-from scipy.interpolate import interp1d, BSpline
+from scipy.optimize import root_scalar
+from scipy.interpolate import interp1d
 from dataclasses import dataclass
 import re
 import io
 from NumOpt.airfoil.bspline import Bspline
 from NumOpt import Opti, cas
+import matplotlib.pyplot as plt
 
 # import aerosandbox.numpy as anp
 # import aerosandbox as asb
@@ -39,18 +41,27 @@ class Oper:
     sos: float = 340.0
 
 
-def find_bracket(f, args, xmin, xmax, n, x_pre=None, scan_window=8, backsearch=False):
+def find_bracket(f, args, xmin, xmax, n, x_pre=None, scan_window=10, backsearch=False):
     if x_pre is not None:
         scan_window = np.deg2rad(scan_window)
-        xxxmin = max(xmin, x_pre - scan_window)
-        xxxmax = min(xmax, x_pre + scan_window)
-        flag, bracket = find_bracket(f=f, args=args, n=10, xmin=x_pre, xmax=xxxmax, backsearch=False)
-        if flag:
-            return flag, bracket
-        else:
-            flag, bracket = find_bracket(f=f, args=args, n=10, xmin=xxxmin, xmax=x_pre, backsearch=True)
+        if x_pre<xmin:
+            flag, bracket = find_bracket(f=f, args=args, n=10, xmin=xmin, xmax=xmin+scan_window, x_pre=None, backsearch=False)
             if flag:
                 return flag, bracket
+        elif x_pre>xmax:
+            flag, bracket = find_bracket(f=f, args=args, n=10, xmin=xmax-scan_window, xmax=xmax, x_pre=None, backsearch=True)
+            if flag:
+                return flag, bracket
+        else:
+            window = (max(x_pre, xmin), min(x_pre + scan_window, xmax))
+            flag, bracket = find_bracket(f=f, args=args, n=10, xmin=window[0], xmax=window[1], x_pre=None, backsearch=False)
+            if flag:
+                return flag, bracket
+            else:
+                window = (max(x_pre - scan_window, xmin), min(x_pre, xmax))
+                flag, bracket = find_bracket(f=f, args=args, n=10, xmin=window[0], xmax=window[1], x_pre=None, backsearch=True)
+                if flag:
+                    return flag, bracket
 
     x_list = np.linspace(xmin, xmax, n)
     if backsearch:
@@ -247,6 +258,12 @@ class CombineAirfoil:
 #         curve = self._bspline(u)
 #         return curve
 class BsplineDistribution(Bspline):
+    def __call__(self, x):
+        return self.get_y_from_x(x)
+
+    def get_xy_from_u(self, u):
+        return super().__call__(u)
+
     def get_u_from_x(self, x):
         opti = Opti()
         u = opti.variable(init_guess=x / (np.max(x) - np.min(x)), lower_bound=0.0, upper_bound=1.0)
@@ -261,56 +278,77 @@ class BsplineDistribution(Bspline):
         return sol(u)
 
     @staticmethod
-    def fit(data, nct, degree=3):
+    def fit(data, nct, degree=3, draw=False):
         opti = Opti()
 
         xdata = data[:, 0]
         ydata = data[:, 1]
-        
-        cts_init=np.empty((nct,2))
-        cts_init[:,0]=np.linspace(xdata[0],xdata[-1],nct)
-        cts_init[:,1]=np.max(ydata)
-        
-        cts_x=opti.variable(init_guess=cts_init[:,0])
-        cts_y=opti.variable(init_guess=cts_init[:,1])
-        cts=cas.hcat((cts_x,cts_y))
-        u=opti.variable(init_guess=np.linspace(0,1,data.shape[0]),lower_bound=0.0,upper_bound=1.0)
 
+        cts_init = np.empty((nct, 2))
+        cts_init[:, 0] = np.linspace(xdata[0], xdata[-1], nct)
+        cts_init[:, 1] = np.max(ydata)
 
-        sp=BsplineDistribution(ctrlpts=cts,degree=degree)
-        curve=sp(u)
+        cts_x = opti.variable(init_guess=cts_init[:, 0])
+        cts_y = opti.variable(init_guess=cts_init[:, 1])
+        cts = cas.hcat((cts_x, cts_y))
+        u = opti.variable(init_guess=np.linspace(0, 1, data.shape[0]), lower_bound=0.0, upper_bound=1.0)
 
-        opti.subject_to([
-            cts_x==np.linspace(xdata[0],xdata[-1],nct),
-            cts_y[0,0]==ydata[0],
-            cts_y[-1,0]==ydata[-1],
-            u[0,0]==0.0,
-            u[1,0]==1.0
-        ])
-        
-        dist=(curve-data)**2
-        residual=cas.sum(dist)
+        sp = BsplineDistribution(ctrlpts=cts, degree=degree)
+        curve = sp.get_xy_from_u(u)
+
+        opti.subject_to([cts_x == np.linspace(xdata[0], xdata[-1], nct), cts_y[0, 0] == ydata[0], cts_y[-1, 0] == ydata[-1], u[0, 0] == 0.0, u[1, 0] == 1.0])
+
+        dist = (curve - data) ** 2
+        residual = cas.sum(dist)
 
         opti.minimize(residual)
 
-        opti.ipopt_solver()
-        sol=opti.solve()
-        cts=sol(cts)
+        opti.ipopt_solver(verbose=False)
+        sol = opti.solve()
+        cts = sol(cts)
+
+        # if draw:
+        #     curve = BsplineDistribution(ctrlpts=cts, degree=degree).get_xy_from_u(np.linspace(0, 1, 100))
+        #     with plt.style.context(["science", "nature", "high-vis", "no-latex"]):
+        #         with plt.rc_context(
+        #             {
+        #                 "axes.linewidth": 1,
+        #                 "lines.linewidth": 2,
+        #                 "axes.labelsize": 15,
+        #                 "xtick.labelsize": 10,
+        #                 "ytick.labelsize": 10,
+        #                 "axes.grid": True,
+        #                 "axes.grid.which": "both",
+        #                 "grid.linestyle": "--",
+        #                 # "figure.subplot.wspace":0.5
+        #             }
+        #         ):
+        #             fig = plt.figure(figsize=(6, 5))
+        #             ax = fig.add_subplot(111)
+        #             ax.plot(curve[:, 0], curve[:, 1], color="magenta", label="interp")
+        #             ax.plot(cts[:, 0], cts[:, 1], "--bo", label="cts", markersize=6, markerfacecolor="b", markeredgecolor="b")
+        #             ax.plot(data[:, 0], data[:, 1], "go", label="data", markersize=6)
+        #             ax.legend(fontsize=15)
+        #             plt.show()
 
         return BsplineDistribution(ctrlpts=cts, degree=degree)
 
-    def get_y(self, x):
+    def get_y_from_x(self, x):
         opti = Opti()
-        u = opti.variable(init_guess=np.linspace(0, 1, len(x)), lower_bound=0, upper_bound=1)
+        u = opti.variable(init_guess=np.linspace(0, 1, x.shape[0]), lower_bound=0, upper_bound=1)
 
-        curve = self.__call__(u)
+        curve = self.get_xy_from_u(u)
 
-        opti.subject_to([u[0, 0] == 0.0, u[-1, 0] == 1.0, cas.diff(u) > 0.0, curve[:, 0] == x])
+        opti.subject_to(
+            [
+                curve[:, 0] == x,
+            ]
+        )
 
-        opti.ipopt_solver()
+        opti.ipopt_solver(verbose=False)
         sol = opti.solve()
         curve = sol(curve)
-        return curve
+        return curve[:, 1]
 
 
 class Section:
@@ -345,7 +383,7 @@ class Section:
         Re = oper.rho * W0 * self.b / oper.mu
         Mach = W0 / oper.sos
 
-        CL, CD = self.af(alpha_deg, Re, Mach)
+        CL, CD = self.af(Alpha=alpha_deg, Reynold=Re, Mach=Mach, Radius=self.r)
 
         Cn = CL * phi_cos - CD * phi_sin
         Ct = CL * phi_sin + CD * phi_cos
@@ -496,14 +534,65 @@ class Section:
 
 
 class Blade:
-    def __init__(self, Rtip, Rhub, Nb, chord_distribution, twist_distribution, pitch):
+    def __init__(
+        self,
+        Rhub,
+        Rtip,
+        Nb: int,
+        chord_distribution: BsplineDistribution,
+        twist_distribution: BsplineDistribution,
+        airfoilmodel: CombineAirfoil,
+        pitch: float,
+        radius_resolutuon: Union[np.ndarray, int] = 10,
+    ):
         self.Rtip = Rtip
         self.Rhub = Rhub
         self.Nb = Nb
-        self.sections = sections
+        self.chord_distribution = chord_distribution
+        self.twist_distribution = twist_distribution
+        self.airfoilmodel = airfoilmodel
+        self.pitch = pitch
 
-        for i in sections:
-            i.set_rotor_parameters(self.Nb, self.Rhub, self.Rtip)
+        if isinstance(radius_resolutuon, int):
+            self.r_list = np.linspace(self.Rhub, self.Rtip, radius_resolutuon)
+        elif isinstance(radius_resolutuon, np.ndarray):
+            self.r_list = np.clip(radius_resolutuon, self.Rhub, self.Rtip)
+        else:
+            raise ValueError("the `radius_resolutuon` must be `np.ndarray` or `int`")
+        self.chord_list = self.chord_distribution(self.r_list)
+        self.twist_list = self.twist_distribution(self.r_list)
+        self.nr = self.r_list.shape[0]
+
+        self.sections = []
+        for i in range(self.nr):
+            sec = Section(af=self.airfoilmodel, theta=self.twist_list[i] + pitch, r=self.r_list[i], b=self.chord_list[i])
+            sec.set_rotor_parameters(Nb=self.Nb, Rhub=self.Rhub, Rtip=self.Rtip)
+            self.sections.append(sec)
+
+        # with plt.style.context(["science", "nature", "high-vis", "no-latex"]):
+        #     with plt.rc_context(
+        #         {
+        #             "axes.linewidth": 1,
+        #             "lines.linewidth": 2,
+        #             "axes.labelsize": 15,
+        #             "xtick.labelsize": 10,
+        #             "ytick.labelsize": 10,
+        #             "axes.grid": True,
+        #             "axes.grid.which": "both",
+        #             "grid.linestyle": "--",
+        #             # "figure.subplot.wspace":0.5
+        #         }
+        #     ):
+        #         fig = plt.figure(figsize=(6, 5))
+        #         ax = fig.add_subplot(111)
+        #         ax.plot(self.r_list, self.chord_list, label="chord")
+        #         ax.set_ylabel("chord")
+        #         ax.set_xlabel("r")
+        #         ax = ax.twinx()
+        #         ax.plot(self.r_list, self.twist_list, label="twist")
+        #         ax.set_ylabel("twist")
+        #         plt.legend()
+        #         plt.show()
 
     def solve(self, V0, omega, rho=1.225, mu=1.81e-5, sos=340.0):
         rs = []
@@ -511,6 +600,7 @@ class Blade:
         dFs = []
         dQs = []
         phi_pre = None
+
         for i in self.sections:
             sec_aero = i.find_root(V0=V0, omega=omega, rho=rho, mu=mu, sos=sos, phi_pre=phi_pre)
             dTs.append(np.array(sec_aero.Tn))
@@ -567,12 +657,22 @@ def test02():
     rs = np.array([Rhub, 0.525, 0.675, 0.825, 0.975, 1.125, 1.275, 1.425, Rtip])
     chords = np.array([0.18, 0.18, 0.225, 0.225, 0.21, 0.1875, 0.1425, 0.12, 0.12])
     pitchs = np.deg2rad(np.array([17.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0]))
+
+    # chord_dist = BsplineDistribution.fit(data=np.vstack((rs, chords)).T, nct=6, draw=False)
+    chord_dist = interp1d(x=rs, y=chords, kind="slinear")
+    twist_dist = BsplineDistribution.fit(data=np.vstack((rs, pitchs)).T, nct=6, draw=False)
+
+    af_list = [FileAirfoil("./pyBEMT/pybemt/airfoils/CLARKY.dat") for _ in range(rs.shape[0])]
+    blade = Blade(
+        Rhub=Rhub, Rtip=Rtip, Nb=Nb, chord_distribution=chord_dist, twist_distribution=twist_dist, pitch=0.0, airfoilmodel=CombineAirfoil(af_list=af_list, r_list=rs)
+    )
+
     # rs = np.array([ 0.525, 0.675, 0.825, 0.975, 1.125, 1.275, 1.425])
     # chords = np.array([0.18, 0.225, 0.225, 0.21, 0.1875, 0.1425, 0.12])
     # pitchs = np.deg2rad(np.array([17.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0]))
 
-    secs = [Section(af=FileAirfoil("./pyBEMT/pybemt/airfoils/CLARKY.dat"), theta=theta, r=r, b=b) for theta, r, b in zip(pitchs, rs, chords)]
-    blade = Blade(Rhub=Rhub, Rtip=Rtip, Nb=Nb, sections=secs)
+    # secs = [Section(af=FileAirfoil("./pyBEMT/pybemt/airfoils/CLARKY.dat"), theta=theta, r=r, b=b) for theta, r, b in zip(pitchs, rs, chords)]
+    # blade = Blade(Rhub=Rhub, Rtip=Rtip, Nb=Nb, sections=secs)
 
     # blade=Blade(Rhub=Rhub,Rtip=Rtip,Nb=Nb,chord_distribution,twist_distribution,pitch)
 
@@ -915,7 +1015,7 @@ def test06():
 
     sp = BsplineDistribution.fit(data=data, nct=10, degree=3)
     u = np.linspace(0, 1, 100)
-    curve = sp(u)
+    curve = sp.get_xy_from_u(u)
 
     with plt.style.context(["science", "nature", "high-vis", "no-latex"]):
         with plt.rc_context(
@@ -942,8 +1042,8 @@ def test06():
 
 if __name__ == "__main__":
     # test01()
-    # test02()
+    test02()
     # test03()
     # test04()
     # test05()
-    test06()
+    # test06()
