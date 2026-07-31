@@ -1,5 +1,6 @@
-from ..opti import cas, np
-
+import numpy as np 
+import casadi as ca
+from NumOpt import Opti
 
 class Bspline:
     def __init__(self, ctrlpts, degree=3):
@@ -20,7 +21,7 @@ class Bspline:
     @staticmethod
     def __deBoor(t, i, k, knots):
         if k == 1:
-            return cas.if_else(cas.logic_and(t >= knots[i], t < knots[i + 1]), 1.0, 0.0)
+            return ca.if_else(ca.logic_and(t >= knots[i], t < knots[i + 1]), 1.0, 0.0)
         else:
             term1 = term2 = 0.0
             delta_t1 = knots[i + k - 1] - knots[i]
@@ -33,6 +34,8 @@ class Bspline:
                 term2 = (knots[i + k] - t) / (delta_t2) * Bspline.__deBoor(t, i + 1, k - 1, knots)
 
             return term1 + term2
+        # if k==0:
+        #     cond0=cas.if_else()
 
     def N_coef(self, t, i):
         return Bspline.__deBoor(t, i, self.order, self.knots)
@@ -50,15 +53,46 @@ class Bspline:
 
         for i in range(nts):
             u = t[i]
-            pts[i] = cas.if_else(u == 1.0, self.ctrlpts[-1:, :], func())
+            pts[i] = ca.if_else(u == 1.0, self.ctrlpts[-1:, :], func())
             # if u == 1.0:
             #     pts[i] = self.ctrlpts[-1:, :]
             # else:
             #     for j in range(self.n + 1):
             #         N_coef = self.N_coef(u, j)
             #         pts[i] = pts[i] + N_coef * self.ctrlpts[j : j + 1, :]
-        pts = cas.vcat(pts)
+        pts = ca.vcat(pts)
         return pts
+    
+    @staticmethod
+    def fit(data, ncpts, degree):
+        opti = Opti()
+        cpts_x = opti.variable(init_guess=np.linspace(data[0, 0], data[-1, 0], ncpts),freeze=True)
+        cpts_y = opti.variable(init_guess=np.linspace(data[0, 1], data[-1, 1], ncpts))
+        u = opti.variable(init_guess=0.5, n_vars=data.shape[0], lower_bound=0.0, upper_bound=1.0)
+        cpts = ca.horzcat(cpts_x, cpts_y)
+
+        sp=Bspline(ctrlpts=cpts,degree=degree)
+
+        data_fit = sp(u)
+
+        y_dist = data_fit[:, 1] - data[:, 1]
+        dist = ca.sum(y_dist**2)
+
+        opti.subject_to(
+            [
+                data_fit[:, 0] == data[:, 0],
+                # data_fit[:,1]==data[:,1]
+            ]
+        )
+
+        opti.minimize(dist)
+        opti.ipopt_solver()
+        sol = opti.solve()
+
+        cpts = sol(cpts)
+        data_fit = sol(data_fit)
+        sp = Bspline(ctrlpts=sol(cpts),degree=degree)
+        return sp
 
 
 class BsplineAirfoil:
@@ -84,7 +118,7 @@ class BsplineAirfoil:
         pts_upper = self.upper_coordinates(t)
         pts_lower = self.lower_coordinates(t)
 
-        pts = cas.vcat([pts_upper[:-1, :], pts_lower])
+        pts = ca.vcat([pts_upper[:-1, :], pts_lower])
         return pts
 
     @property
@@ -110,7 +144,7 @@ class BsplineAirfoil:
         }
 
         # ============================ upper ==========================
-        opti = cas.Opti()
+        opti = ca.Opti()
 
         ctu = opti.variable(nctu, 2)
         ctu_init = np.zeros(ctu.shape)
@@ -127,13 +161,13 @@ class BsplineAirfoil:
         coords = af.upper_coordinates(t)
 
         dist = coords - upper_coordinates
-        residual = cas.sum(cas.dot(dist, dist))
+        residual = ca.sum(ca.dot(dist, dist))
 
         opti.subject_to(
             [
                 opti.bounded(0.0, t, 1.0),
                 opti.bounded(0.0, ctu[:, 0], 1.0),
-                cas.diff(t) > 0.0,
+                ca.diff(t) > 0.0,
                 ctu[:, 0] == ctu_init[:, 0],
                 ctu[0, 1] == ctu_init[0, 1],
                 ctu[-1, 1] == ctu_init[-1, 1],
@@ -156,7 +190,7 @@ class BsplineAirfoil:
             ctl_sol = np.array(ctu_sol)
             ctl_sol[:, 1] = -ctu_sol[:, 1]
         else:
-            opti = cas.Opti()
+            opti = ca.Opti()
 
             ctu = opti.variable(nctu, 2)
 
@@ -173,13 +207,13 @@ class BsplineAirfoil:
             coords = af.lower_coordinates(t)
 
             dist = coords - lower_coordinates
-            residual = cas.sum(cas.dot(dist, dist))
+            residual = ca.sum(ca.dot(dist, dist))
 
             opti.subject_to(
                 [
                     opti.bounded(0.0, t, 1.0),
                     opti.bounded(0.0, ctl[:, 0], 1.0),
-                    cas.diff(t) > 0.0,
+                    ca.diff(t) > 0.0,
                     ctl[:, 0] == ctl_init[:, 0],
                     ctl[0, 1] == ctl_init[0, 1],
                     ctl[-1, 1] == ctl_init[-1, 1],
@@ -199,3 +233,52 @@ class BsplineAirfoil:
 
         af_fit = BsplineAirfoil(ctu=ctu_sol, ctl=ctl_sol)
         return af_fit
+
+def test04():
+    import matplotlib.pyplot as plt
+    import scienceplots
+
+    data = np.array(
+        [
+            [1.0, 1.0],
+            [1.5, 2.0],
+            [2.0, 3.0],
+            [2.5, 3.0],
+            [3.5, 1.0],
+            [4.0, 0.0],
+            [5.0, -1.0],
+        ]
+    )
+
+    sp = Bspline.fit(data=data, ncpts=5, degree=3)
+    xy = sp(np.linspace(0, 1, 100))
+
+    with plt.style.context(["science", "nature", "high-vis", "no-latex"]):
+        with plt.rc_context(
+            {
+                "axes.linewidth": 1,
+                "lines.linewidth": 2,
+                "axes.labelsize": 15,
+                "xtick.labelsize": 10,
+                "ytick.labelsize": 10,
+                "axes.grid": True,
+                "axes.grid.which": "both",
+                "grid.linestyle": "--",
+                # "figure.subplot.wspace":0.5
+            }
+        ):
+            fig = plt.figure(figsize=(6, 5))
+
+            ax = fig.add_subplot(111)
+            ax.plot(xy[:, 0], xy[:, 1], label="Bspline")
+            ax.plot(sp.ctrlpts[:, 0], sp.ctrlpts[:, 1], "--o", markersize=10, label="cpts")
+            ax.plot(data[:, 0], data[:, 1], "^", markersize=10, label="data")
+
+            ax.legend(fontsize=15)
+            plt.tight_layout()
+            plt.subplots_adjust(wspace=0.2)
+            plt.show()
+
+
+if __name__=="__main__":
+    test04()

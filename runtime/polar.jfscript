@@ -1,0 +1,14 @@
+
+Options.Country(0);
+Geometry.Open("D:/Doc/NumOpt/runtime/af.txt");
+Options.MachNumber(0.300);
+Options.StallModel(0);
+Options.TransitionModel(1);
+Options.GroundEffect(0);
+Options.HeightOverSpan(0.5);
+Options.AspectRatio(0.000);
+Options.SweepAngle(0.0);
+Modify.SetPivot(25,0);
+Polar.Analyze(1000000.000,3000000.000,1000000.000,-60.000,60.000,1.000,100,100,0,0);
+Polar.Save("D:/Doc/NumOpt/runtime/polar.txt");
+JavaFoil.Exit();

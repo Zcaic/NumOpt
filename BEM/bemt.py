@@ -369,11 +369,10 @@ class Section:
         self.solidity = self.Nb * self.b / (2 * np.pi * self.r)
 
     def residual(self, phi, oper):
-        R, a, ap, Cn, Ct, alpha, CL, CD, u, v = self._residual(phi, oper)
+        R, a, ap, Cn, Ct, alpha, CL, CD, u, v ,F= self._residual(phi, oper)
         return R
 
     def _residual(self, phi, oper: Oper):
-        # phi = np.atleast_1d(phi)
         phi_sin = np.sin(phi)
         phi_cos = np.cos(phi)
         alpha = self.theta - phi
@@ -411,32 +410,19 @@ class Section:
             ap = np.empty_like(phi)
             if phi < 0.0:
                 k *= -1
-            # idx=phi<0.0
-            # k[idx]*=-1
-
             if np.isclose(k, 1.0, self.eps):
                 return 1.0, 0, 0, Cn, Ct, alpha, CL, CD, 0.0, 0.0
-            # idx1=np.fabs(k-1.0)<=self.eps
-            # R[idx1]=1.0
-            # a[idx1]=0.0
-            # ap[idx1]=0.0
-
             if k >= -2.0 / 3:
                 a = k / (1 - k)
-            # idx2=k>=-2.0/3
-            # idx2[idx1]=False
-            # a[idx2]=k[idx2]/(1-k[idx2])
             else:
                 g1 = 2 * k + 1.0 / 9
                 g2 = -2 * k - 1.0 / 3
                 g3 = -2 * k - 7.0 / 9
                 a = (g1 + np.sqrt(g2)) / g3
-            # idx2[idx1]=True
-            # idx3=~idx2
-            # g1 = 2 * k[idx3] + 1.0 / 9
-            # g2 = -2 * k[idx3] - 1.0 / 3
-            # g3 = -2 * k[idx3] - 7.0 / 9
-            # a[idx3] = (g1 + np.sqrt(g2)) / g3
+                # g1=F*(2*k)+10/9
+                # g2=F*(F-2*k-4/3)
+                # g3=2*F*(1-k)-25/9
+                # a=(g1+np.sqrt(g2))/g3
 
             u = a * oper.Vx
             if oper.Vx < 0.0:
@@ -444,16 +430,12 @@ class Section:
 
             if np.isclose(kp, -1.0, atol=self.eps):
                 return 1.0, 0, 0, Cn, Ct, alpha, CL, CD, 0.0, 0.0
-            # idx4=np.fabs(kp+1.0)<=self.eps
-            # R[idx4]=1.0
-            # a[idx4]=0.0
-            # ap[idx4]=0.0
 
             ap = kp / (1 + kp)
             v = ap * oper.Vy
 
             R = np.sin(phi) / (1 + a) - oper.Vx / oper.Vy * np.cos(phi) / (1 - ap)
-        return R, a, ap, Cn, Ct, alpha, CL, CD, u, v
+        return R, a, ap, Cn, Ct, alpha, CL, CD, u, v,F
 
     def prandtl(self, phi):
         phi_sin = np.fabs(np.sin(phi))
@@ -524,11 +506,20 @@ class Section:
             if sucess:
                 sol = root_scalar(self.residual, method="bisect", bracket=bracket, args=(oper,))
                 phi_star = sol.root
-                R, a, ap, Cn, Ct, alpha, CL, CD, u, v = self._residual(phi_star, oper)
+                R, a, ap, Cn, Ct, alpha, CL, CD, u, v,F = self._residual(phi_star, oper)
                 W2 = (Vx + u) ** 2 + (Vy - v) ** 2
                 dT = Cn * 0.5 * rho * W2 * self.b
                 dF = Ct * 0.5 * rho * W2 * self.b
                 dQ = dF * self.r
+
+                if np.isclose(oper.Vx,0.0,atol=self.eps):
+                    G=np.sqrt(F)
+                elif np.isclose(oper.Vy,0.0,atol=self.eps):
+                    G=F 
+                else:
+                    G=(-1.0+np.sqrt(1.0+4*a*(1.0+a)*F))/(2*a)
+                u*=G 
+                v*=G
                 return SectionAero(Tn=dT, Tt=dF, Q=dQ, phi=phi_star, alpha=alpha, W=np.sqrt(W2), CL=CL, CD=CD, Cn=Cn, Ct=Ct, u=u, v=v)
         return SectionAero()
 
@@ -603,11 +594,16 @@ class Blade:
 
         for i in self.sections:
             sec_aero = i.find_root(V0=V0, omega=omega, rho=rho, mu=mu, sos=sos, phi_pre=phi_pre)
-            dTs.append(np.array(sec_aero.Tn))
-            dFs.append(np.array(sec_aero.Tt))
-            dQs.append(np.array(sec_aero.Q))
-            rs.append(i.r)
+            dTs.append(np.atleast_1d(sec_aero.Tn))
+            dFs.append(np.atleast_1d(sec_aero.Tt))
+            dQs.append(np.atleast_1d(sec_aero.Q))
+            rs.append(np.atleast_1d(i.r))
             phi_pre = sec_aero.phi
+
+        dTs=np.asarray(dTs).ravel()
+        dFs=np.asarray(dFs).ravel()
+        dQs=np.asarray(dQs).ravel()
+
         T = self.Nb * np.trapezoid(y=dTs, x=rs)
         F = self.Nb * np.trapezoid(y=dFs, x=rs)
         M = self.Nb * np.trapezoid(y=dQs, x=rs)

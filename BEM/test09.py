@@ -256,32 +256,17 @@ class Section:
             ap = np.empty_like(phi)
             if phi < 0.0:
                 k *= -1
-            # idx=phi<0.0
-            # k[idx]*=-1
 
             if np.isclose(k, 1.0, self.eps):
                 return 1.0, 0, 0, Cn, Ct, alpha, CL, CD, 0.0, 0.0
-            # idx1=np.fabs(k-1.0)<=self.eps
-            # R[idx1]=1.0
-            # a[idx1]=0.0
-            # ap[idx1]=0.0
 
             if k >= -2.0 / 3:
                 a = k / (1 - k)
-            # idx2=k>=-2.0/3
-            # idx2[idx1]=False
-            # a[idx2]=k[idx2]/(1-k[idx2])
             else:
                 g1 = 2 * k + 1.0 / 9
                 g2 = -2 * k - 1.0 / 3
                 g3 = -2 * k - 7.0 / 9
                 a = (g1 + np.sqrt(g2)) / g3
-            # idx2[idx1]=True
-            # idx3=~idx2
-            # g1 = 2 * k[idx3] + 1.0 / 9
-            # g2 = -2 * k[idx3] - 1.0 / 3
-            # g3 = -2 * k[idx3] - 7.0 / 9
-            # a[idx3] = (g1 + np.sqrt(g2)) / g3
 
             u = a * oper.Vx
             if oper.Vx < 0.0:
@@ -289,11 +274,7 @@ class Section:
 
             if np.isclose(kp, -1.0, atol=self.eps):
                 return 1.0, 0, 0, Cn, Ct, alpha, CL, CD, 0.0, 0.0
-            # idx4=np.fabs(kp+1.0)<=self.eps
-            # R[idx4]=1.0
-            # a[idx4]=0.0
-            # ap[idx4]=0.0
-
+            
             ap = kp / (1 + kp)
             v = ap * oper.Vy
 
