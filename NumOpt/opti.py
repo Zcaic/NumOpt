@@ -94,7 +94,7 @@ from typing import Callable,Literal,Dict,Any
 import numpy as np
 
 class Opti(ca.Opti):
-    def variable(self,init_guess,scale=1.0,lower_bound=None,upper_bound=None):
+    def variable(self,init_guess,scale=1.0,lower_bound=None,upper_bound=None)->ca.MX:
         init_guess=np.atleast_2d(init_guess)
         shape=init_guess.shape
         var=scale*super().variable(*shape)
