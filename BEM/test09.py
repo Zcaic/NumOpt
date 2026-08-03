@@ -435,7 +435,7 @@ def test02():
     # chords = np.array([0.18, 0.225, 0.225, 0.21, 0.1875, 0.1425, 0.12])
     # pitchs = np.deg2rad(np.array([17.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0]))
 
-    secs = [Section(af=FileAirfoil("./pyBEMT/pybemt/airfoils/CLARKY.dat"), theta=theta, r=r, b=b) for theta, r, b in zip(pitchs, rs, chords)]
+    secs = [Section(af=FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/CLARKY.dat"), theta=theta, r=r, b=b) for theta, r, b in zip(pitchs, rs, chords)]
     blade = Blade(Rhub=Rhub, Rtip=Rtip, Nb=Nb, sections=secs)
 
     ret_list = []
@@ -463,7 +463,7 @@ def test02():
             ax.plot(vinf_list / (1100 / 60 * 2 * Rtip), [i["CT"] for i in ret_list], label="My Bemt")
             print([i["CT"] for i in ret_list])
 
-            exp_data = np.loadtxt("./propeller_dat.csv", skiprows=1, ndmin=2)
+            exp_data = np.loadtxt("./BEM/propeller_dat.csv", skiprows=1, ndmin=2)
             ax.plot(exp_data[:, 0], exp_data[:, 1], label="exp")
             ax.set_xlabel("J")
             ax.set_ylabel("CT")
@@ -474,7 +474,7 @@ def test02():
             ax.plot(vinf_list / (1100 / 60 * 2 * Rtip), [i["CP"] for i in ret_list], label="My Bemt")
             print([i["CT"] for i in ret_list])
 
-            exp_data = np.loadtxt("./propeller_dat.csv", skiprows=1, ndmin=2)
+            exp_data = np.loadtxt("./BEM/propeller_dat.csv", skiprows=1, ndmin=2)
             ax.plot(exp_data[:, 0], exp_data[:, 2], label="exp")
             ax.set_xlabel("J")
             ax.set_ylabel("CP")

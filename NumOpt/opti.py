@@ -1,6 +1,6 @@
 # import aerosandbox.numpy as anp
-# import aerosandbox as asb 
-# import numpy as np 
+# import aerosandbox as asb
+# import numpy as np
 # import casadi as cas
 # from typing import Callable, Any, Dict,Literal
 # from .cprint import cprint_yellow
@@ -39,7 +39,7 @@
 #             "ipopt.fast_step_computation": "yes",
 #             "detect_simple_bounds": detect_simple_bounds,
 #             "expand": expand,
-#             "ipopt.mu_strategy": mu_strategy, 
+#             "ipopt.mu_strategy": mu_strategy,
 #             "ipopt.start_with_resto": start_with_resto
 #         }
 #         if jit:
@@ -88,37 +88,43 @@
 #         return sol
 
 
-
-import casadi as ca 
-from typing import Callable,Literal,Dict,Any
+import casadi as ca
+from typing import Callable, Literal, Dict, Any
 import numpy as np
 
+
 class Opti(ca.Opti):
-    def variable(self,init_guess,scale=1.0,lower_bound=None,upper_bound=None)->ca.MX:
-        init_guess=np.atleast_2d(init_guess)
-        shape=init_guess.shape
-        var=scale*super().variable(*shape)
-        self.set_initial(var,init_guess)
+    def variable(self, init_guess, scale=1.0, lower_bound=None, upper_bound=None) -> ca.MX:
+        init_guess = np.atleast_2d(init_guess)
+        shape = init_guess.shape
+        var = scale * super().variable(*shape)
+        self.set_initial(var, init_guess)
 
         if lower_bound is not None:
             # if not np.shape(lower_bound):
             #     lower_bound=np.full(shape,lower_bound)
-            self.subject_to(ca.vec(var/scale)>=ca.vec(lower_bound/scale))
+            self.subject_to(ca.vec(var / scale) >= ca.vec(lower_bound / scale))
         if upper_bound is not None:
             # if not np.shape(upper_bound):
             #     upper_bound=np.full(shape,upper_bound)
-            self.subject_to(ca.vec(var/scale)<=ca.vec(upper_bound/scale))
+            self.subject_to(ca.vec(var / scale) <= ca.vec(upper_bound / scale))
 
-        return var 
-    
+        return var
+
+    def parameter(self, value):
+        value=np.atleast_2d(value)
+        shape = value.shape
+        param = super().parameter(*shape)
+        self.set_value(param, value)
+        return param
+
     def minimize(
-        self,f: ca.MX,
+        self,
+        f: ca.MX,
     ) -> None:
         super().minimize(f)
 
-    def maximize(
-        self,f: ca.MX
-    ) -> None:
+    def maximize(self, f: ca.MX) -> None:
         super().minimize(-1 * f)
 
     def ipopt_solver(
@@ -130,8 +136,8 @@ class Opti(ca.Opti):
         jit: bool = False,
         detect_simple_bounds: bool = False,
         expand: bool = True,
-        mu_strategy:Literal["monotone","adaptive"]="adaptive",
-        start_with_resto:Literal["yes","no"]="no",
+        mu_strategy: Literal["monotone", "adaptive"] = "adaptive",
+        start_with_resto: Literal["yes", "no"] = "no",
         options: Dict = None,
     ):
         if options is None:
@@ -144,8 +150,8 @@ class Opti(ca.Opti):
             "ipopt.fast_step_computation": "yes",
             "detect_simple_bounds": detect_simple_bounds,
             "expand": expand,
-            "ipopt.mu_strategy": mu_strategy, 
-            "ipopt.start_with_resto": start_with_resto
+            "ipopt.mu_strategy": mu_strategy,
+            "ipopt.start_with_resto": start_with_resto,
         }
         if jit:
             default_options["jit"] = True
@@ -172,6 +178,6 @@ class Opti(ca.Opti):
             self.callback(callback)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     # cprint_yellow("it is ok")
     ...
