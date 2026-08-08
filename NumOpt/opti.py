@@ -112,7 +112,7 @@ class Opti(ca.Opti):
         return var
 
     def parameter(self, value):
-        value=np.atleast_2d(value)
+        value = np.atleast_2d(value)
         shape = value.shape
         param = super().parameter(*shape)
         self.set_value(param, value)
@@ -130,6 +130,7 @@ class Opti(ca.Opti):
     def ipopt_solver(
         self,
         max_iter: int = 1000,
+        tol: float = 1e-8,
         max_runtime: float = 1e20,
         callback: Callable[[int], Any] = None,
         verbose: bool = True,
@@ -145,6 +146,7 @@ class Opti(ca.Opti):
         default_options = {
             "ipopt.sb": "yes",  # Hide the IPOPT banner.
             "ipopt.max_iter": max_iter,
+            "ipopt.tol": tol,
             "ipopt.max_cpu_time": max_runtime,
             "ipopt.mu_strategy": "adaptive",
             "ipopt.fast_step_computation": "yes",

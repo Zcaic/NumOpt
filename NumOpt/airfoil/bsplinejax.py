@@ -34,18 +34,25 @@ class BsplineCurve:
 
     @staticmethod
     def deBoor(s, u, knots, cpts, degree):
-        d = [cpts[s - degree + i,:].reshape((-1,1)) for i in range(degree + 1)]
+        p = degree
+        
+        idx0 = s - p
+        idxs = idx0 + jnp.arange(p + 1, dtype=jnp.int32)
+        d = cpts[idxs, :]   # (p+1, dim)
 
-        for r in range(1, degree + 1):
-            for i in range(degree, r - 1, -1):
-                idx = i + s - degree
-                denom = knots[i + 1 + s - r] - knots[idx]
-                if abs(denom) < 1e-14:
-                    alpha = ca.DM(0.0)
-                else:
-                    alpha = (u - knots[idx]) / denom
-                d[i] = (1 - alpha) * d[i - 1] + alpha * d[i]
-        return d[degree]
+        for r in range(1, p + 1):
+            for j in range(p, r - 1, -1):
+                i = s - p + j
+                denom = knots[i + p - r + 1] - knots[i]
+                alpha = jnp.where(
+                    jnp.abs(denom) < 1e-14,
+                    0.0,
+                    (u - knots[i]) / denom,
+                )
+                dj = (1.0 - alpha) * d[j - 1] + alpha * d[j]
+                d = d.at[j].set(dj)
+
+        return d[p]
 
     @staticmethod
     def __get_xy_from_u(u, cpts, knots, degree):
