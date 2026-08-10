@@ -166,7 +166,7 @@ class Root(ca.Callback):
         self.jac_callback = JacFun()
         return self.jac_callback 
     
-if __name__=="__main__":
+def test01():
     x=ca.MX.sym('x')
     p=ca.MX.sym("p")
     g=ca.Function("g",[x,p],[x**2-p],["x","p"],["R"]) 
@@ -187,3 +187,25 @@ if __name__=="__main__":
 
     print(ddx_dp2(10.0))
     # print(0.25*10**(-1.5))
+
+def test02():
+    def imp():
+        x=ca.MX.sym('x')
+        p=ca.MX.sym("p")
+        g=ca.Function("g",[x,p],[x**2-p],["x","p"],["R"])
+        root=Root("root",x0=2.0,g=g)
+        return root
+
+    root=imp()
+
+    opti=Opti()
+    p=opti.variable(init_guess=5.0,lower_bound=1.0,upper_bound=20.0)
+    x_star=root(p)
+    # print(x_star.shape)
+    opti.minimize(x_star)
+    opti.ipopt_solver()
+    sol=opti.solve()
+    print(sol.value(p))
+if __name__=="__main__":
+    # test01()
+    test02()
