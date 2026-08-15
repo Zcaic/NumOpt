@@ -95,7 +95,7 @@ import numpy as np
 
 class Opti(ca.Opti):
     def variable(self, init_guess, scale=1.0, lower_bound=None, upper_bound=None) -> ca.MX:
-        init_guess = np.atleast_2d(init_guess)
+        init_guess = ca.DM(init_guess)
         shape = init_guess.shape
         var = scale * super().variable(*shape)
         self.set_initial(var, init_guess)
