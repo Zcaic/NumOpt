@@ -235,8 +235,8 @@ class Section:
 
         # F = 1.0
         F = self.prandtl(phi)
-        k = Cn * self.solidity / (4 * F * np.sin(phi) ** 2)
-        kp = Ct * self.solidity / (4 * F * np.sin(phi) * np.cos(phi))
+        k = Cn * self.solidity / (4 * F * np.sin(phi) ** 2+1e-9)
+        kp = Ct * self.solidity / (4 * F * np.sin(phi) * np.cos(phi)+1e-9)
 
         if np.isclose(oper.Vx, 0.0, atol=self.eps):
             u = np.sign(phi) * kp * Cn / Ct * oper.Vy
@@ -282,7 +282,7 @@ class Section:
         return R, a, ap, Cn, Ct, alpha, CL, CD, u, v
 
     def prandtl(self, phi):
-        phi_sin = np.fabs(np.sin(phi))
+        phi_sin = np.fabs(np.sin(phi))+1e-9
 
         ftip = self.Nb / 2.0 * (self.Rtip - self.r) / (self.r * phi_sin)
         Ftip = 2.0 / np.pi * np.arccos(np.exp(-ftip))
@@ -374,6 +374,9 @@ class Blade:
         dTs = []
         dFs = []
         dQs = []
+        phis=[]
+        Fs=[]
+
         phi_pre = None
         for i in self.sections:
             sec_aero = i.find_root(V0=V0, omega=omega, rho=rho, mu=mu, sos=sos, phi_pre=phi_pre)
@@ -381,6 +384,10 @@ class Blade:
             dFs.append(np.array(sec_aero.Tt))
             dQs.append(np.array(sec_aero.Q))
             rs.append(i.r)
+            phis.append(sec_aero.phi)
+            Fs.append(i.prandtl(sec_aero.phi))
+
+
             phi_pre = sec_aero.phi
         T = self.Nb * np.trapezoid(y=dTs, x=rs)
         F = self.Nb * np.trapezoid(y=dFs, x=rs)
@@ -398,6 +405,9 @@ class Blade:
             eta = CT / CP
         else:
             eta = (CT / CP) * J
+        # print(phis)
+        # print(Fs)
+        print(T)
         return {"T": T, "M": M, "P": P, "CT": CT, "CQ": CQ, "CP": CP, "eta": eta}
 
 
@@ -439,7 +449,7 @@ def test02():
     blade = Blade(Rhub=Rhub, Rtip=Rtip, Nb=Nb, sections=secs)
 
     ret_list = []
-    vinf_list = np.linspace(1.0, 44.0, 20)
+    vinf_list = np.linspace(1.0, 44.0, 40)
     for i in vinf_list:
         ret = blade.solve(V0=i, omega=1100 * 2 * np.pi / 60.0, rho=1.225)
         ret_list.append(ret)
@@ -501,14 +511,14 @@ def test03():
     # chords = np.array([0.18, 0.225, 0.225, 0.21, 0.1875, 0.1425, 0.12])
     # pitchs = np.deg2rad(np.array([17.0, 17.0, 17.0, 17.0, 17.0, 17.0, 17.0]))
     afs = [
-        FileAirfoil("./pyBEMT/pybemt/airfoils/NACA_4412.dat"),
-        FileAirfoil("./pyBEMT/pybemt/airfoils/GOE_450.dat"),
-        FileAirfoil("./pyBEMT/pybemt/airfoils/GOE_450.dat"),
-        FileAirfoil("./pyBEMT/pybemt/airfoils/GOE_450.dat"),
-        FileAirfoil("./pyBEMT/pybemt/airfoils/GOE_450.dat"),
-        FileAirfoil("./pyBEMT/pybemt/airfoils/GOE_450.dat"),
-        FileAirfoil("./pyBEMT/pybemt/airfoils/GOE_408.dat"),
-        FileAirfoil("./pyBEMT/pybemt/airfoils/GOE_408.dat"),
+        FileAirfoil("./BEM//pyBEMT/pybemt/airfoils/NACA_4412.dat"),
+        FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/GOE_450.dat"),
+        FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/GOE_450.dat"),
+        FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/GOE_450.dat"),
+        FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/GOE_450.dat"),
+        FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/GOE_450.dat"),
+        FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/GOE_408.dat"),
+        FileAirfoil("./BEM/pyBEMT/pybemt/airfoils/GOE_408.dat"),
     ]
     secs = [Section(af=af, theta=theta, r=r, b=b) for af, theta, r, b in zip(afs, pitchs, rs, chords)]
     blade = Blade(Rhub=Rhub, Rtip=Rtip, Nb=Nb, sections=secs)
@@ -533,7 +543,7 @@ def test03():
                 # "figure.subplot.wspace":0.5
             }
         ):
-            with open("./pyBEMT/examples/tmotor28_data.csv", "r") as fin:
+            with open("./BEM/pyBEMT/examples/tmotor28_data.csv", "r") as fin:
                 contents = fin.read()
             contents = contents.replace(";", " ")
             exp_data = np.loadtxt(io.StringIO(contents), skiprows=1, ndmin=2)
@@ -564,7 +574,7 @@ def test03():
             # ax.grid(True,"both",linestyle="-")
             plt.tight_layout()
             plt.subplots_adjust(wspace=0.2)
-            plt.savefig("./runtime/pic01.png", dpi=300, transparent=True)
+            # plt.savefig("./runtime/pic01.png", dpi=300, transparent=True)
             plt.show()
 
 
