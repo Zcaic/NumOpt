@@ -1,9 +1,9 @@
-from NumOpt.airfoil.bezier import BezierAirfoil
-from NumOpt.opti import cas, Opti, anp
-import numpy as np
-import aerosandbox as asb
-from NumOpt.cprint import nostd
-from NumOpt.airfoil.export_cst2nx import cst2nx
+# from NumOpt.airfoil.bezier import BezierAirfoil
+# from NumOpt.opti import cas, Opti, anp
+# import numpy as np
+# import aerosandbox as asb
+# from NumOpt.cprint import nostd
+# from NumOpt.airfoil.export_cst2nx import cst2nx
 
 
 def test1():
@@ -890,6 +890,20 @@ def test27():
     parallel=Parallel(n_jobs=2)
     print(parallel(delayed(np.sqrt)(i**2) for i in range(10)))
 
+def test28():
+    from NumOpt import ca
+
+    x = ca.SX.sym('x')
+    g=ca.sin(x)-0.5
+
+    rf = ca.rootfinder('rf', "bisection",{"x":x,"g":g},{'lb': 0.0, 'ub': ca.pi/2.0,"search_step":5.0/180.0*ca.pi})
+    x_star=rf(x0=50/180.0*ca.pi)["x"]
+    print(x_star/ca.pi*180.0)
+    print(ca.sin(x_star))
+    print(rf.stats())
+    
+
+
 if __name__ == "__main__":
     # test1()
     # test2()
@@ -917,4 +931,5 @@ if __name__ == "__main__":
     # test24()
     # test25()
     # test26()
-    test27()
+    # test27()
+    test28()
