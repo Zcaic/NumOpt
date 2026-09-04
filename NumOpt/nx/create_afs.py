@@ -98,6 +98,67 @@ session.UpdateManager.DoUpdate(markid)
     script_file.write_text(script)
 
 
+def modify_afs():
+    templata = """
+import NXOpen
+import NXOpen.Features
+import json
+
+data_file = "%(data_file)s"
+
+with open(data_file, "r") as fin:
+    data = json.load(fin)
+
+session = NXOpen.Session.GetSession()
+part = session.Parts.Work
+markid = session.SetUndoMark(NXOpen.Session.MarkVisibility.Visible, "modify airfoils")
+
+for name, coords in zip(data["afs_name"], data["afs"]):
+    spline = part.Features.FindObject(name)
+    splineEx = part.Features.CreateStudioSplineBuilderEx(spline)
+    for idx,i in enumerate(coords):
+         geoCon = splineEx.ConstraintManager.FindItem(idx)
+         pt = geoCon.Point
+         pt.SetCoordinates(NXOpen.Point3d(i[0]*1000.0, 0.0, i[i]*1000.0))
+    
+    splineEx.Evaluate()
+    spline= splineEx.Commit()
+    splineEx.Destroy()
+
+session.UpdateManager.DoUpdate(markid)
+
+"""
+
+    af0 = asb.Airfoil("ls0413").set_TE_thickness(0.0).to_kulfan_airfoil().set_TE_thickness(2.4e-3)
+    # af1 = asb.Airfoil(coordinates=af1).set_TE_thickness(0.0).to_kulfan_airfoil().set_TE_thickness(2.4e-3)
+    # af2 = asb.Airfoil(coordinates=af2).set_TE_thickness(0.0).to_kulfan_airfoil().set_TE_thickness(2.4e-3)
+    # af3 = asb.Airfoil(coordinates=af3).set_TE_thickness(0.0).to_kulfan_airfoil().set_TE_thickness(2.4e-3)
+
+    afs=[af0,]
+    afs_name=["SPLINE(1)",]
+
+    data = {}
+
+    coord_list = []
+
+    for af in afs:
+        coords = af.to_airfoil(n_coordinates_per_side=60).coordinates.tolist()
+        coord_list.append(coords)
+
+    data["afs"] = coord_list
+    data["afs_name"] = afs_name
+
+    data_file = Path("./runtime/data.json")
+    script_file = Path("./runtime/nx.py")
+
+    data_file.parent.mkdir(exist_ok=True)
+    with open(data_file,"w") as fout:
+        json.dump(data,fout)
+
+    script = templata % {"data_file": data_file.resolve().as_posix()}
+    script_file.write_text(script)
+
+
 if __name__ == "__main__":
     create_afs()
     # gen_NACA6(af_file="./afs/naca64a312.dat",t=12,xtc=30,cl=0.4,A=1)

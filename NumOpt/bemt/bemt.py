@@ -588,9 +588,9 @@ def test03():
             self.air_data = asb.Airfoil("clarky")
 
         def __call__(self, Alpha=None, Reynold=None, Mach=None, r=None):
-            aero = self.air_data.get_aero_from_neuralfoil(alpha=Alpha, mach=Mach, Re=Reynold, model_size="large")
-            cl = aero["CL"]
-            cd = aero["CD"]
+            aero = self.air_data.get_aero_from_neuralfoil(alpha=Alpha.T, mach=Mach.T, Re=Reynold.T, model_size="large")
+            cl = aero["CL"].T
+            cd = aero["CD"].T
             return cl, cd
 
     afmodel = Airfoil()
@@ -874,7 +874,7 @@ def test06():
 if __name__ == "__main__":
     # test01()
     # test02()
-    # test03()
+    test03()
     # test04()
-    test05()
+    # test05()
     # test06()
