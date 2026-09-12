@@ -94,20 +94,24 @@ import numpy as np
 
 
 class Opti(ca.Opti):
-    def variable(self, init_guess, scale=1.0, lower_bound=None, upper_bound=None) -> ca.MX:
+    def variable(self, init_guess, scale=1.0, lower_bound=None, upper_bound=None, freeze: bool = False) -> ca.MX:
         init_guess = ca.DM(init_guess)
         shape = init_guess.shape
-        var = scale * super().variable(*shape)
-        self.set_initial(var, init_guess)
+        if freeze:
+            var = scale * super().parameter(*shape)
+            self.set_value(var)
+        else:
+            var = scale * super().variable(*shape)
+            self.set_initial(var, init_guess)
 
-        if lower_bound is not None:
-            # if not np.shape(lower_bound):
-            #     lower_bound=np.full(shape,lower_bound)
-            self.subject_to(ca.vec(var / scale) >= ca.vec(lower_bound / scale))
-        if upper_bound is not None:
-            # if not np.shape(upper_bound):
-            #     upper_bound=np.full(shape,upper_bound)
-            self.subject_to(ca.vec(var / scale) <= ca.vec(upper_bound / scale))
+            if lower_bound is not None:
+                # if not np.shape(lower_bound):
+                #     lower_bound=np.full(shape,lower_bound)
+                self.subject_to(ca.vec(var / scale) >= ca.vec(lower_bound / scale))
+            if upper_bound is not None:
+                # if not np.shape(upper_bound):
+                #     upper_bound=np.full(shape,upper_bound)
+                self.subject_to(ca.vec(var / scale) <= ca.vec(upper_bound / scale))
 
         return var
 
