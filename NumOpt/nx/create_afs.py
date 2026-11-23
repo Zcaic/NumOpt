@@ -119,7 +119,7 @@ for name, coords in zip(data["afs_name"], data["afs"]):
     for idx,i in enumerate(coords):
          geoCon = splineEx.ConstraintManager.FindItem(idx)
          pt = geoCon.Point
-         pt.SetCoordinates(NXOpen.Point3d(i[0]*1000.0, 0.0, i[i]*1000.0))
+         pt.SetCoordinates(NXOpen.Point3d(i[0]*1000.0, 0.0, i[1]*1000.0))
     
     splineEx.Evaluate()
     spline= splineEx.Commit()

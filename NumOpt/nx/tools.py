@@ -84,5 +84,6 @@ if __name__ == "__main__":
         data = json.load(fin)
 
     session = NXOpen.Session.GetSession()
+    # status=session.Parts.OpenActiveDisplay("xxx.prt",NXOpen.DisplayPartOption.AllowAdditional)    
     create_af(data["init_coords"],session=session)
     # modify_af(coords=data["init_coords"], name="SPLINE(1)", session=session)
